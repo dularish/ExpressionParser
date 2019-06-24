@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "restore": {
+    "d:\\kuttudla\\ParserApplicationF#\\ParserApp\\ParserApp.fsproj": {}
+  },
+  "projects": {
+    "d:\\kuttudla\\ParserApplicationF#\\ParserApp\\ParserApp.fsproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "d:\\kuttudla\\ParserApplicationF#\\ParserApp\\ParserApp.fsproj",
+        "projectName": "ParserApp",
+        "projectPath": "d:\\kuttudla\\ParserApplicationF#\\ParserApp\\ParserApp.fsproj",
+        "packagesPath": "C:\\Users\\kuttudla\\.nuget\\packages\\",
+        "outputPath": "d:\\kuttudla\\ParserApplicationF#\\ParserApp\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\kuttudla\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net461"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net461": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net461": {
+          "dependencies": {
+            "FSharp.Core": {
+              "target": "Package",
+              "version": "[4.6.2, )"
+            },
+            "System.ValueTuple": {
+              "target": "Package",
+              "version": "[4.4.0, )"
+            }
+          }
+        }
+      },
+      "runtimes": {
+        "win7-x86": {
+          "#import": []
+        }
+      }
+    }
+  }
+}
