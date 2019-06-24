@@ -26,20 +26,21 @@ let run parser input =
     let (Parser innerFunction) = parser
     innerFunction input
 
-let AndThen parser1 parser2 =
-    let innerFn input =
-        let result1 = run parser1 input
-        match result1 with
-        |Success (matched1, remaining1) ->
-            let result2 = run parser2 remaining1
-            match result2 with
-            | Success (matched2,remaining2) ->
-                Success( (matched1, matched2) , remaining2)
-            | Failure err -> Failure err
-        | Failure err -> Failure err
-    Parser innerFn          
+//This works but reimplemented using bind
+// let AndThen parser1 parser2 =
+//     let innerFn input =
+//         let result1 = run parser1 input
+//         match result1 with
+//         |Success (matched1, remaining1) ->
+//             let result2 = run parser2 remaining1
+//             match result2 with
+//             | Success (matched2,remaining2) ->
+//                 Success( (matched1, matched2) , remaining2)
+//             | Failure err -> Failure err
+//         | Failure err -> Failure err
+//     Parser innerFn          
 
-let (.>>.) = AndThen      
+// let (.>>.) = AndThen      
 
 let OrElse parser1 parser2 =
     let innerFn input =
@@ -57,39 +58,6 @@ let OrElse parser1 parser2 =
     Parser innerFn        
 
 let (<|>) = OrElse        
-
-let ignoreLeft parser1 parser2 =
-    let innerFn input =
-        let result1 = run parser1 input
-        match result1 with
-        | Success (matched1, remaining1) ->
-            let result2 = run parser2 remaining1
-            match result2 with
-            | Success (matched2,remaining2) ->
-                Success (matched2, remaining2)
-            | Failure err ->
-                Failure err
-        | Failure err -> Failure err
-    Parser innerFn     
-
-let (>>.) = ignoreLeft
-
-let ignoreRight parser1 parser2 =
-    let innerFn input =
-        let result1 = run parser1 input
-        match result1 with
-        | Success (matched1, remaining1) ->
-            let result2 = run parser2 remaining1
-            match result2 with
-            | Success (matched2,remaining2) ->
-                Success (matched1, remaining2)
-            | Failure err ->
-                Failure err
-        | Failure err -> Failure err
-    Parser innerFn     
-
-let (.>>) = ignoreRight    
-
 
 let choice listOfParsers =
     List.reduce (<|>) listOfParsers
@@ -120,30 +88,82 @@ let parseDigit =
 let parseLowerCaseLetter = (anyOf lowercaseLetters |> transformErrorMessage) "Not a lowercase letter"
 let parseUpperCaseLetter = (anyOf uppercaseLetters |> transformErrorMessage) "Not a uppercase letter"
 
-//Notice how the function that we pass is always a one parameter function, what if it's a two or three parameter function? Well that's the limitation applyP solves
-let mapP parser func =
-    let innerFunc input =
+
+let bindP f parser =
+    let innerFunc input = 
         let result1 = run parser input
         match result1 with
-        | Success (matched1, remaining1) ->
-            Success (func matched1, remaining1)
         | Failure err ->
             Failure err
-    Parser innerFunc       
+        | Success (x, remainingInput1) ->
+            let anotherParser = f x
+            run anotherParser remainingInput1
+    Parser innerFunc        
 
-let (<!>) = mapP  
+let (>>=) p f = bindP f p
 
-//We want to put the mapping function after we get the desired parser
-let ( |>> ) f x = mapP f x
+//Notice how the function that we pass is always a one parameter function, what if it's a two or three parameter function? Well that's the limitation applyP solves
+//Also notice how the function is applied only when it's a success
+//This works but reimplemented using bind
+// let mapP func parser =
+//     let innerFunc input =
+//         let result1 = run parser input
+//         match result1 with
+//         | Success (matched1, remaining1) ->
+//             Success (func matched1, remaining1)
+//         | Failure err ->
+//             Failure err
+//     Parser innerFunc       
 
 let returnP x = 
     let innerFn input =
         Success (x, input)
     Parser innerFn
 
+//Reimplemented using bind
+let mapP f =
+    bindP (f >> returnP)
+
+let (<!>) = mapP  
+
+//Reimplemented using bind
+//Think how it gets executed
+let AndThen parser1 parser2 =
+    parser1 >>= (fun p1Result ->
+    parser2 >>= (fun p2Result ->
+        returnP(p1Result, p2Result)))
+let (.>>.) = AndThen
+
+//Reimplemented using bind
+//Although it looks like the function accepts a single parameter, but it can be extended to use functions that take multiple parameters, see lift2 implementation
 let applyP fP xP =
-    fP .>>. xP
-    |>> (fun(f,x) ->f x)
+    fP >>= (fun(fResult) ->
+    xP >>= (fun(xResult) ->
+        returnP (fResult xResult)))
+
+let ignoreLeft parser1 parser2 =
+    parser1 .>>. parser2
+    |> mapP (fun(a,b) -> b)
+
+let (>>.) = ignoreLeft
+
+let ignoreRight parser1 parser2 =
+    parser1 .>>. parser2
+    |> mapP (fun(a,b) -> a)  
+
+let (.>>) = ignoreRight    
+
+let between p1 p2 p3 =
+    p1 >>. p2 .>> p3
+
+//We want to put the mapping function after we get the desired parser
+let ( |>> ) x f = mapP f x
+
+
+//This works but reimplemented using bind
+// let applyP fP xP =
+//     fP .>>. xP
+//     |>> (fun(f,x) ->f x)
 
 let ( <*> ) = applyP
 
@@ -186,11 +206,82 @@ let pString str =
     |> sequence
     |>> charToList
 
+//Notice that the output is simply a tuple and we will be reusing this function for many and many1
+let rec parserZeroOrMore parser input =
+
+    let result1 = run parser input
+    match result1 with
+    | Failure err ->
+        ([], input)
+    | Success (matched1, remainingInput1) ->
+        let (subsequentValues, remainingInput2) =
+            parserZeroOrMore parser remainingInput1
+        (matched1 :: subsequentValues, remainingInput2)  
+
+
+let many parser =
+    
+    let innerFn input = 
+        Success (parserZeroOrMore parser input)
+
+    Parser innerFn    
+
+//This works but reimplemented using bind
+// let many1 parser = 
+//     let innerFn input = 
+//         let result1 = run parser input
+//         match result1 with
+//         | Failure err ->
+//             Failure err
+//         | Success (matched1, remainingInput1) ->
+//             let (subsequentValues, remainingInput2) =
+//                 parserZeroOrMore parser remainingInput1
+//             Success (matched1:: subsequentValues, remainingInput2)
+//     Parser innerFn     
+
+//Reimplemented using bind
+let many1 parser = 
+    parser >>= (fun firstResult ->
+    many parser >>= (fun restResultList ->
+        returnP (firstResult::restResultList)))
+
+let charListToInt charList= 
+    String(List.toArray charList) |> int       
+
+let pInt = 
+    many1 parseDigit
+    |>> charListToInt
+
+let opt p =
+    let some = p |>> Some
+    let none = returnP None
+    some <|> none
+
+let pIntWithSign =
+    (opt (pChar '-')) .>>. pInt
+
+let sepBy1 parser sepParser =
+    let sepThenParser = sepParser >>. parser
+
+    parser .>>. (many sepThenParser)
+    |>> (fun(x, xlist) -> x::xlist)
+
+let sepBy parser sepParser =
+    (sepBy1 parser sepParser) <|> (returnP [])
+
+let oneOrMoreDigits =
+    sepBy1 parseDigit (pChar ';')
+
+let zeroOrMoreDigits =
+    sepBy parseDigit (pChar ';')
 
 let examplesForTestingParserBuildingBlocks =
     printfn "Testing a line"
     let stringInput = "ABC"
+    let stringWithManyAs = "AAAABC"
+    let stringWithManyAsButNotWithFirstChar = "BAAAABC"
     let numberInput = "123A"
+    let negativeNumber = "-123A"
     let parseA = pChar 'A'
     let result = run parseA stringInput
     let parseB = pChar 'B'
@@ -216,4 +307,14 @@ let examplesForTestingParserBuildingBlocks =
 
     let resultParseABC = ((pString "ABC") |> run) stringInput
 
-    printfn "Run result : %A" resultParseABC
+    let resultForManyAs = ((many parseA) |> run) stringWithManyAs
+
+    let resultForMany1As = ((many1 parseA) |> run) stringWithManyAs
+
+    let resultForIntParsing = (pInt |> run) numberInput
+
+    let resultForIntWithNegParsing = (pIntWithSign |> run) negativeNumber
+
+    let resultForOneOrMoreInts = (oneOrMoreDigits |> run) "1;2;3;4;5;"
+
+    printfn "Run result : %A" resultForOneOrMoreInts
