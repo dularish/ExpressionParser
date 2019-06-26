@@ -1,8 +1,0 @@
-d:\kuttudla\ParserApplicationF#\ParserApp\bin\Debug\netstandard2.0\ParserApp.deps.json
-d:\kuttudla\ParserApplicationF#\ParserApp\bin\Debug\netstandard2.0\ParserApp.dll
-d:\kuttudla\ParserApplicationF#\ParserApp\bin\Debug\netstandard2.0\ParserApp.pdb
-d:\kuttudla\ParserApplicationF#\ParserApp\obj\Debug\netstandard2.0\ParserApp.fsprojAssemblyReference.cache
-d:\kuttudla\ParserApplicationF#\ParserApp\obj\Debug\netstandard2.0\ParserApp.AssemblyInfoInputs.cache
-d:\kuttudla\ParserApplicationF#\ParserApp\obj\Debug\netstandard2.0\ParserApp.AssemblyInfo.fs
-d:\kuttudla\ParserApplicationF#\ParserApp\obj\Debug\netstandard2.0\ParserApp.dll
-d:\kuttudla\ParserApplicationF#\ParserApp\obj\Debug\netstandard2.0\ParserApp.pdb
