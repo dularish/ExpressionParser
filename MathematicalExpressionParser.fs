@@ -96,8 +96,28 @@ let rec tryParseExpression input =
     | Failure (_) ->
         ([],input)
 
-let evaluateCalculation firstNum (operator:Token.ArithmeticOperator) secondNum =
-    
+let evaluateCalculation (firstNum:Token) (operator:ArithmeticOperator) (secondNum:Token) =
+    let first = 
+        match firstNum with
+        | Constant a -> a
+        | _ -> 0
+    let second =
+        match secondNum with
+        | Constant a -> a
+        | _ -> 0
+    let Constant second = secondNum
+    match operator with
+    | ArithmeticOperator.Plus -> Token.Constant (first + second)
+    | ArithmeticOperator.Minus -> Token.Constant (first - second)
+    | ArithmeticOperator.Multiply -> Token.Constant (first * second)
+    | ArithmeticOperator.Divide -> Token.Constant (first / second)
+
+let getOperatorPriority (operator:ArithmeticOperator) =
+    match operator with
+    | ArithmeticOperator.Plus -> 1
+    | ArithmeticOperator.Minus -> 1
+    | ArithmeticOperator.Multiply -> 2
+    | ArithmeticOperator.Divide -> 2
 
 let rec evaluateExpression (inputList:EntryType list) =
     match inputList with
@@ -117,7 +137,18 @@ let rec evaluateExpression (inputList:EntryType list) =
         let thirdTokenResult = evaluateExpression thirdTokenList
         evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondToken) :: EntryType.Token(thirdTokenResult) :: someList)
     | [EntryType.Token firstToken;EntryType.Token (Token.ArithmeticOperator secondToken);EntryType.Token thirdToken] ->
-        
+        evaluateCalculation firstToken secondToken thirdToken
+    | EntryType.Token firstToken :: EntryType.Token (Token.ArithmeticOperator secondToken) :: EntryType.Token thirdToken :: EntryType.Token (Token.ArithmeticOperator fourthToken) :: EntryType.Token fifthToken :: restOfTheList ->
+        let secondTokenPriority = getOperatorPriority secondToken
+        let fourthTokenPriority = getOperatorPriority fourthToken
+
+        if secondTokenPriority > fourthTokenPriority then
+            let firstResult = evaluateCalculation firstToken secondToken thirdToken
+            evaluateExpression ((EntryType.Token firstResult) :: EntryType.Token (Token.ArithmeticOperator fourthToken) :: (EntryType.Token fifthToken) :: restOfTheList)
+        else
+            //Improve this part by passing a value to evaluateExpression
+            let lastResult = evaluateExpression ((EntryType.Token thirdToken) :: EntryType.Token (Token.ArithmeticOperator fourthToken) :: (EntryType.Token fifthToken) :: restOfTheList)
+            evaluateExpression (EntryType.Token firstToken :: EntryType.Token (Token.ArithmeticOperator secondToken) :: [EntryType.Token lastResult])
  
 let listPatternMatching =
     match [1;2;3;4] with
