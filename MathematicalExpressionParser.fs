@@ -81,6 +81,7 @@ type EntryType =
     | Token of Token
     | TokenList of EntryType list
 
+//This is a simple expression parser which doesn't solve by BODMAS
 let rec tryParseExpression input =
     let result = run parseAToken input
     match result with
@@ -97,6 +98,7 @@ let rec tryParseExpression input =
     | Failure (_) ->
         ([],input)
 
+
 let getPriority operator =
     if (operator = (BinaryOperator.Plus)) then 1
     elif (operator = (BinaryOperator.Minus)) then 1
@@ -104,6 +106,7 @@ let getPriority operator =
     elif (operator = (BinaryOperator.Divide)) then 2
     else 0
 
+//This implementation is a Mathematical expression parser which parses by applying BODMAS
 let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: BinaryOperator option)=
     let result = run parseAToken input
     match result with
@@ -164,39 +167,6 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
     | Failure (_) ->
         (stackExp,input)
 
-//let evaluateCalculation firstNum (operator:Token) secondNum =
-//    let firstOperand = 
-//        match firstNum with
-//        |
-//    match operator with
-//    | ArithmeticOperator Plus ->
-//        Constant (firstNum + secondNum)
-//    | ArithmeticOperator Minus ->
-//        Constant (firstNum - secondNum)
-//    | ArithmeticOperator Multiply ->
-//        Constant (firstNum * secondNum)
-//    | ArithmeticOperator Divide ->
-//        Constant (firstNum / secondNum)
-
-//let rec evaluateExpression (inputList:EntryType list) =
-//    match inputList with
-//    | [] ->
-//        Token.Constant 0
-//    | [EntryType.TokenList oneToken] ->
-//        evaluateExpression oneToken
-//    | [EntryType.Token oneToken] ->
-//        oneToken
-//    | (EntryType.TokenList firstToken) :: someTail ->
-//        let firstTokenResult = evaluateExpression firstToken
-//        evaluateExpression (EntryType.Token(firstTokenResult) :: someTail)
-//    | (EntryType.Token firstToken) :: (EntryType.TokenList secondTokenList) :: someList ->
-//        let secondTokenResult = evaluateExpression secondTokenList
-//        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondTokenResult) :: someList)
-//    | (EntryType.Token firstToken) :: (EntryType.Token secondToken) :: (EntryType.TokenList thirdTokenList) :: someList ->
-//        let thirdTokenResult = evaluateExpression thirdTokenList
-//        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondToken) :: EntryType.Token(thirdTokenResult) :: someList)
-//    | [EntryType.Token firstToken;EntryType.Token (Token.ArithmeticOperator secondToken);EntryType.Token thirdToken] ->
-//        (evaluateCalculation firstToken (Token.ArithmeticOperator secondToken) thirdToken)
  
 let listPatternMatching =
     match [1;2;3;4] with
