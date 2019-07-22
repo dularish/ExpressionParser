@@ -114,21 +114,20 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
         //Validate whether stackOp is None - Pending
         (stackExp,remaining)
     | Success (Token.Bracket BracketOpen, remaining) ->
-        let (resultToEndOfBracket, finalRemaining) = tryParseMathExpression remaining (None) (None)//OneExpression
-        let resultToOtherEnd, anotherFinalRemaining = tryParseMathExpression finalRemaining (resultToEndOfBracket) (None)
-        match resultToOtherEnd with
+        let (resultToEndOfBracket, finalRemaining) = tryParseMathExpression remaining (None) (None)
+        match resultToEndOfBracket with
         | Some someResultToOtherEnd ->
             match stackExp with
             | None ->
-                (resultToOtherEnd, anotherFinalRemaining)
+                (resultToEndOfBracket, finalRemaining)
             | Some someStackExp ->
                 match stackOp with
                 | None ->
-                    (None, anotherFinalRemaining)
+                    (None, finalRemaining)//This is not expected during valid formula entry
                 | Some someStackOp ->
-                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd)), anotherFinalRemaining)
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd)), finalRemaining)
         | None ->
-            (stackExp, anotherFinalRemaining)
+            (stackExp, finalRemaining)//This is not expected when user enters multiplication even before brackets
     | Success (Token.BinaryOperator opMatched, remaining) ->
         let (resultToEnd, finalRemaining) = (tryParseMathExpression remaining (stackExp) (Some opMatched))
         (resultToEnd, finalRemaining)
@@ -193,7 +192,7 @@ let examplesForMathematicalExpressionParser =
     let parsedExpression2 exp = tryParseMathExpression exp (None) (None)
 
     let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9]
-    //let listOfExpressions = [exp7]
+    //let listOfExpressions = [exp5]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A" exp (parsedExpression2 exp)
     listPatternMatching |> ignore
