@@ -2,11 +2,20 @@
 open System
 open ParserBuildingBlocks
 
-type ArithmeticOperator =
+type BinaryOperator =
     | Plus
     | Minus
     | Divide
     | Multiply
+
+type UnaryOperator = 
+    | Decrement
+    | Increment
+    | Log10
+
+type Operator =
+    | BinaryOperator of BinaryOperator
+    | UnaryOperator of UnaryOperator
 
 type Brackets =
     | BracketOpen
@@ -14,11 +23,12 @@ type Brackets =
 
 type Expression = 
     | Constant of int
-    | Expression of Expression*ArithmeticOperator*Expression
+    | BinaryExpression of Expression*BinaryOperator*Expression
+    | UnaryExpression of UnaryOperator * Expression
 
 type Token = 
     | Constant of int
-    | ArithmeticOperator of ArithmeticOperator
+    | BinaryOperator of BinaryOperator
     | Bracket of Brackets
 
 let intToUnion input =
@@ -32,10 +42,10 @@ let arithmeticOps =
         ['+';'-';'/';'*']
 
 let arithmeticCharToUnion input =
-    if input = '+' then Token.ArithmeticOperator Plus
-    else if input = '-' then Token.ArithmeticOperator Minus
-    else if input = '*' then Token.ArithmeticOperator Multiply
-    else Token.ArithmeticOperator Divide
+    if input = '+' then (BinaryOperator (Plus))
+    elif input = '-' then (BinaryOperator (Minus))
+    elif input = '*' then (BinaryOperator (Multiply))
+    else (BinaryOperator (Divide))
 
 let parseArithmeticOp =
     arithmeticOps
@@ -60,21 +70,12 @@ let parseBrackets inputString=
 let parseCloseBracket = pChar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
-
-
-//let rec parseExpression inputString = 
-//    let resultForOpenBracket = run parseOpenBracket inputString
-
-//    match resultForOpenBracket with 
-//    | Success(_, remainingText) ->
-//        let parsedInnerExp = parseExpression .>>. (opt (parseArithmeticOp .>>. parseExpression)) .>> parseCloseBracket
-//        let resultForparsedInnerExp = run parsedInnerExp remainingText
-//        match resultForparsedInnerExp with 
-//        | Success((exp*opt*exp), ArithmeticOperator) ->
-
 let parseSpaces = many (pChar ' ') 
 let parseAToken = 
     parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseConstant)
+
+let parseTwoTokens =
+    (parseAToken .>>. parseAToken)
 
 type EntryType = 
     | Token of Token
@@ -84,10 +85,10 @@ let rec tryParseExpression input =
     let result = run parseAToken input
     match result with
     | Success (Token.Bracket BracketClose, remaining) ->
-        ([EntryType.Token (Bracket BracketClose)],remaining)
+        ([],remaining)
     | Success (Token.Bracket BracketOpen, remaining) ->
         let (resultToEndOfBracket, finalRemaining) = tryParseExpression remaining
-        let oneFullExpression = EntryType.TokenList ( (EntryType.Token (Bracket BracketOpen)) :: resultToEndOfBracket)
+        let oneFullExpression = EntryType.TokenList ( resultToEndOfBracket)
         let resultToOtherEnd, anotherFinalRemaining = tryParseExpression finalRemaining
         (oneFullExpression :: resultToOtherEnd, anotherFinalRemaining)
     | Success (otherToken, remaining) ->
@@ -96,28 +97,106 @@ let rec tryParseExpression input =
     | Failure (_) ->
         ([],input)
 
-let evaluateCalculation firstNum (operator:Token.ArithmeticOperator) secondNum =
-    
+let getPriority operator =
+    if (operator = (BinaryOperator.Plus)) then 1
+    elif (operator = (BinaryOperator.Minus)) then 1
+    elif (operator = (BinaryOperator.Multiply)) then 2
+    elif (operator = (BinaryOperator.Divide)) then 2
+    else 0
 
-let rec evaluateExpression (inputList:EntryType list) =
-    match inputList with
-    | [] ->
-        Token.Constant 0
-    | [EntryType.TokenList oneToken] ->
-        evaluateExpression oneToken
-    | [EntryType.Token oneToken] ->
-        oneToken
-    | (EntryType.TokenList firstToken) :: someTail ->
-        let firstTokenResult = evaluateExpression firstToken
-        evaluateExpression (EntryType.Token(firstTokenResult) :: someTail)
-    | (EntryType.Token firstToken) :: (EntryType.TokenList secondTokenList) :: someList ->
-        let secondTokenResult = evaluateExpression secondTokenList
-        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondTokenResult) :: someList)
-    | (EntryType.Token firstToken) :: (EntryType.Token secondToken) :: (EntryType.TokenList thirdTokenList) :: someList ->
-        let thirdTokenResult = evaluateExpression thirdTokenList
-        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondToken) :: EntryType.Token(thirdTokenResult) :: someList)
-    | [EntryType.Token firstToken;EntryType.Token (Token.ArithmeticOperator secondToken);EntryType.Token thirdToken] ->
-        
+let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: BinaryOperator option)=
+    let result = run parseAToken input
+    match result with
+    | Success (Token.Bracket BracketClose, remaining) ->
+        //Validate whether stackOp is None - Pending
+        (stackExp,remaining)
+    | Success (Token.Bracket BracketOpen, remaining) ->
+        let (resultToEndOfBracket, finalRemaining) = tryParseMathExpression remaining (None) (None)//OneExpression
+        let resultToOtherEnd, anotherFinalRemaining = tryParseMathExpression finalRemaining (resultToEndOfBracket) (None)
+        match resultToOtherEnd with
+        | Some someResultToOtherEnd ->
+            match stackExp with
+            | None ->
+                (resultToOtherEnd, anotherFinalRemaining)
+            | Some someStackExp ->
+                match stackOp with
+                | None ->
+                    (None, anotherFinalRemaining)
+                | Some someStackOp ->
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd)), anotherFinalRemaining)
+        | None ->
+            (stackExp, anotherFinalRemaining)
+    | Success (Token.BinaryOperator opMatched, remaining) ->
+        let (resultToEnd, finalRemaining) = (tryParseMathExpression remaining (stackExp) (Some opMatched))
+        (resultToEnd, finalRemaining)
+    | Success (Token.Constant constMatched, remaining) ->
+        match stackExp with
+        | None ->
+            let (resultToEnd, finalRemaining) = (tryParseMathExpression remaining (Some (Expression.Constant constMatched)) (None))
+            (resultToEnd, finalRemaining)
+        | Some someStackExp ->
+            let constMatchedCaseResult = run parseAToken remaining
+            match constMatchedCaseResult with
+            | Success (Token.BinaryOperator opMatched, remainingCase1) ->
+                //Compare the priorities
+                //If matched priority is higher then stackExp operator (tryParseMathExpression)
+                //Otherwise tryParseMathExpression remainingCase1 (Expression of stackExp stackOp constMatched) (opMatched)
+                if (getPriority opMatched) > (getPriority stackOp.Value) then
+                    let resultToEnd, remainingCase1 = tryParseMathExpression remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched)
+                    (Some (Expression.BinaryExpression (someStackExp, stackOp.Value, resultToEnd.Value)), remainingCase1)
+                else
+                    let resultToEnd, remainingCase2 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, stackOp.Value, Expression.Constant constMatched))) (Some opMatched)
+                    (resultToEnd, remainingCase2)
+            | Success (Token.Bracket BracketClose, remainingCase2) ->
+                match stackOp with
+                | Some someStackOp ->
+                    tryParseMathExpression remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None)
+                | _ -> 
+                    (None, input)
+            | Failure _ ->
+                match stackOp with
+                | Some someStackOp ->
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched)), remaining)
+                | None ->
+                    (stackExp, input)//Unexpected code block during proper input
+            | _ ->
+                (None, input)//Unexpected code block during proper input
+    | Failure (_) ->
+        (stackExp,input)
+
+//let evaluateCalculation firstNum (operator:Token) secondNum =
+//    let firstOperand = 
+//        match firstNum with
+//        |
+//    match operator with
+//    | ArithmeticOperator Plus ->
+//        Constant (firstNum + secondNum)
+//    | ArithmeticOperator Minus ->
+//        Constant (firstNum - secondNum)
+//    | ArithmeticOperator Multiply ->
+//        Constant (firstNum * secondNum)
+//    | ArithmeticOperator Divide ->
+//        Constant (firstNum / secondNum)
+
+//let rec evaluateExpression (inputList:EntryType list) =
+//    match inputList with
+//    | [] ->
+//        Token.Constant 0
+//    | [EntryType.TokenList oneToken] ->
+//        evaluateExpression oneToken
+//    | [EntryType.Token oneToken] ->
+//        oneToken
+//    | (EntryType.TokenList firstToken) :: someTail ->
+//        let firstTokenResult = evaluateExpression firstToken
+//        evaluateExpression (EntryType.Token(firstTokenResult) :: someTail)
+//    | (EntryType.Token firstToken) :: (EntryType.TokenList secondTokenList) :: someList ->
+//        let secondTokenResult = evaluateExpression secondTokenList
+//        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondTokenResult) :: someList)
+//    | (EntryType.Token firstToken) :: (EntryType.Token secondToken) :: (EntryType.TokenList thirdTokenList) :: someList ->
+//        let thirdTokenResult = evaluateExpression thirdTokenList
+//        evaluateExpression (EntryType.Token(firstToken) :: EntryType.Token(secondToken) :: EntryType.Token(thirdTokenResult) :: someList)
+//    | [EntryType.Token firstToken;EntryType.Token (Token.ArithmeticOperator secondToken);EntryType.Token thirdToken] ->
+//        (evaluateCalculation firstToken (Token.ArithmeticOperator secondToken) thirdToken)
  
 let listPatternMatching =
     match [1;2;3;4] with
@@ -134,13 +213,18 @@ let examplesForMathematicalExpressionParser =
     let exp3 = "(23 + 42)"
     let exp4 = "(23 + (22 + 43))"
     let exp5 = "(23 + 22) + 53"
-    let exp6 = "(23 + 24) + (25 + 26)"
+    let exp6 = "((23 + 22) + 53)"
+    let exp7 = "(23 + 24) + (25 + 26)"
+    let exp8 = "21 + 22 + 23 + 24 + 25 + 26"
+    let exp9 = "1 + 2 * 3 + 5 + 6 * 8"
 
     let resultForParseAToken = ((many1 parseAToken) |> run) exp6
-    let resultForExpression exp = tryParseExpression exp
+    let parsedExpression exp = tryParseExpression exp
+    let parsedExpression2 exp = tryParseMathExpression exp (None) (None)
 
-    let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6]
+    let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9]
+    //let listOfExpressions = [exp7]
 
-    let printResult exp = printfn "%A" (resultForExpression exp)
+    let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A" exp (parsedExpression2 exp)
     listPatternMatching |> ignore
     listOfExpressions |> List.iter printResult
