@@ -237,6 +237,7 @@ type MathExpressionParsingFailureType =
     | SequencingOfOperatorsNotAllowed of string
     | OperatorNotExpected of string
     | UnhandledInput of string
+    | EmptyExpression of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option
@@ -249,13 +250,13 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
     | Success (Token.Bracket BracketClose, remaining) ->
         //Validate whether stackOp is None - Pending
         if isOpened then
-            (ExpressionParsingSuccess stackExp,remaining, true)
+            (ExpressionParsingSuccess stackExp,remaining, not isOpened)//Setting isOpened to false because BracketClose is found now
         else
-            (ExpressionParsingFailure (TooManyParanthesis input) , input, true)
+            (ExpressionParsingFailure (TooManyParanthesis input) , input, isOpened)//Not changing the state of isOpened as it's no more possible to close
     | Success (Token.Bracket BracketOpen, remaining) ->
-        let (resultToEndOfBracket, finalRemaining, isClosed) = tryParseMathExpressionWithMemoryOp remaining (None) (None) (memoryOp) (true)
-        if not isClosed then
-            (ExpressionParsingFailure (InsufficientParanthesis input), input, false)
+        let (resultToEndOfBracket, finalRemaining, isResultOpened) = tryParseMathExpressionWithMemoryOp remaining (None) (None) (memoryOp) (true)
+        if isResultOpened then
+            (ExpressionParsingFailure (InsufficientParanthesis input), input, isResultOpened)
         else
             match resultToEndOfBracket with
             | ExpressionParsingSuccess parsedResult ->
@@ -267,13 +268,13 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
                     | Some someStackExp ->
                         match stackOp with
                         | None ->
-                            (ExpressionParsingFailure (MissingOperator input), finalRemaining, false)//This is not expected during valid formula entry
+                            (ExpressionParsingFailure (MissingOperator input), finalRemaining, isOpened)//This is not expected during valid formula entry
                         | Some someStackOp ->
                             tryParseMathExpressionWithMemoryOp finalRemaining (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd))) (None) (memoryOp) (isOpened)
                 | None ->
-                    (ExpressionParsingFailure (EmptyParanthesis input), finalRemaining, false)//This is not expected when user enters multiplication even before brackets
+                    (ExpressionParsingFailure (EmptyExpression input), finalRemaining, isOpened)//This is not expected when user enters multiplication even before brackets
             | ExpressionParsingFailure failure ->
-                (ExpressionParsingFailure failure, input, false)
+                (ExpressionParsingFailure failure, input, isOpened)
     | Success (Token.BinaryOperator opMatched, remaining) ->
         let opMatchedHandlingWithoutMemory = fun() ->
             match opMatched with
@@ -288,17 +289,17 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
                             let newStackExp = Some (Expression.Constant (someConstant * -1.0))
                             (tryParseMathExpressionWithMemoryOp remainingSub (newStackExp) (None) (memoryOp) (isOpened))
                         | Failure _ ->
-                            (ExpressionParsingFailure (TrailingNegativeSign input) , input, false) //This case when minus symbol is not followed by any token
+                            (ExpressionParsingFailure (TrailingNegativeSign input) , input, isOpened) //This case when minus symbol is not followed by any token
                         | _ ->
-                            (ExpressionParsingFailure (InvalidSymbolFollowedByNegativeSign input), input, false) //This case when minus symbole is followed by a non-digit//Possibly to be changed after incorporating variables referencing
+                            (ExpressionParsingFailure (InvalidSymbolFollowedByNegativeSign input), input, isOpened) //This case when minus symbole is followed by a non-digit//Possibly to be changed after incorporating variables referencing
                     | _ ->
-                        (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, false) // When a operator is matched stackOp should have been empty
+                        (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, isOpened) // When a operator is matched stackOp should have been empty
                 | Some someStackExp ->
                     match stackOp with
                     | None ->
                         (tryParseMathExpressionWithMemoryOp remaining (stackExp) (Some opMatched) (memoryOp) (isOpened))
                     | Some _ ->
-                        (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, false) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
+                        (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, isOpened) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
             | _ ->
                 //More cases of check can be better
                 (tryParseMathExpressionWithMemoryOp remaining (stackExp) (Some opMatched) (memoryOp) (isOpened))
@@ -308,9 +309,9 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
             if getPriority opMatched <= getPriority someMemoryOp then
                 match stackExp with
                 | Some someStackExp ->
-                    (ExpressionParsingSuccess stackExp, input, false)
+                    (ExpressionParsingSuccess stackExp, input, isOpened)
                 | None ->
-                    (ExpressionParsingFailure (OperatorNotExpected input), input , false)
+                    (ExpressionParsingFailure (OperatorNotExpected input), input , isOpened)
             else 
                 opMatchedHandlingWithoutMemory()
         | None ->
@@ -330,34 +331,34 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
                 match (stackOp) with
                 | Some someStackOp ->
                     if (getPriority opMatched) > (getPriority someStackOp) then
-                        let resultToEnd, remainingCase11, isClosed = tryParseMathExpressionWithMemoryOp remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched) (stackOp) (isOpened)
+                        let resultToEnd, remainingCase11, isResultOpened = tryParseMathExpressionWithMemoryOp remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched) (stackOp) (isOpened)
                         match resultToEnd with
                         | ExpressionParsingSuccess parsingResult ->
                             match parsingResult with
                             |Some someResultToEnd ->
-                                tryParseMathExpressionWithMemoryOp remainingCase11 (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToEnd))) (None) (memoryOp) (if isOpened then not isClosed else isOpened)
+                                tryParseMathExpressionWithMemoryOp remainingCase11 (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToEnd))) (None) (memoryOp) (isResultOpened) //(if isOpened then not isClosed else isOpened)
                             | None ->
-                                (ExpressionParsingFailure (OperatorNotExpected remaining), input, false) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                                (ExpressionParsingFailure (OperatorNotExpected remaining), input, isResultOpened) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
                         | ExpressionParsingFailure failure ->
-                            (ExpressionParsingFailure failure, input , false)
+                            (ExpressionParsingFailure failure, input , isResultOpened)
                     else
                         let constMatchHandlingWithoutMemoryOp = fun() ->
-                            let resultToEnd, remainingCase12, isClosed = tryParseMathExpressionWithMemoryOp remainingCase1 (None) (None) (Some opMatched) (isOpened)
+                            let resultToEnd, remainingCase12, isResultOpened = tryParseMathExpressionWithMemoryOp remainingCase1 (None) (None) (Some opMatched) (isOpened)
                             match resultToEnd with
                             | ExpressionParsingSuccess parsingResult ->
                                 match parsingResult with
                                 |Some someResultToEnd ->
-                                    tryParseMathExpressionWithMemoryOp remainingCase12 (Some(Expression.BinaryExpression (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched) , opMatched, someResultToEnd))) (None) (memoryOp) (if isOpened then not isClosed else isOpened)
+                                    tryParseMathExpressionWithMemoryOp remainingCase12 (Some(Expression.BinaryExpression (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched) , opMatched, someResultToEnd))) (None) (memoryOp) (isResultOpened) //(if isOpened then not isClosed else isOpened)
                                 | None ->
-                                    (ExpressionParsingFailure (OperatorNotExpected remaining), input, false) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                                    (ExpressionParsingFailure (OperatorNotExpected remaining), input, isResultOpened) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
                             | ExpressionParsingFailure failure ->
-                                (ExpressionParsingFailure failure, input, false)
+                                (ExpressionParsingFailure failure, input, isResultOpened)
                         match memoryOp with
                         | Some someMemoryOp ->
                             if (getPriority opMatched > getPriority someMemoryOp) then
                                 constMatchHandlingWithoutMemoryOp()
                             else
-                                (ExpressionParsingSuccess (Some(BinaryExpression (someStackExp, someStackOp, Constant constMatched))),remaining, false)
+                                (ExpressionParsingSuccess (Some(BinaryExpression (someStackExp, someStackOp, Constant constMatched))),remaining, isOpened)
                         | None ->
                             constMatchHandlingWithoutMemoryOp()
                 | None ->
@@ -365,27 +366,37 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
                     
             | Success (Token.Bracket BracketClose, remainingCase2) ->
                 match stackOp with
-                | Some someStackOp ->
-                    tryParseMathExpressionWithMemoryOp remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None) (memoryOp) (isOpened)
-                | _ -> 
-                    (ExpressionParsingFailure (EmptyParanthesis input), input, false)//Empty expressions
+                    | Some someStackOp ->
+                        tryParseMathExpressionWithMemoryOp remaining (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None) (memoryOp) (isOpened)
+                    | _ -> 
+                        (ExpressionParsingFailure (MissingOperator input), input, isOpened)//Empty expressions
+                //
+                //if isOpened then
+                //    match stackOp with
+                //    | Some someStackOp ->
+                //        tryParseMathExpressionWithMemoryOp remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None) (memoryOp) (not isOpened) //(isOpened)
+                //    | _ -> 
+                //        (ExpressionParsingFailure (EmptyParanthesis input), input, not isOpened)//Empty expressions
+                //else
+                //    (ExpressionParsingFailure (TooManyParanthesis input) , input, isOpened)
+                
             | Failure _ ->
                 match stackOp with
                 | Some someStackOp ->
-                    (ExpressionParsingSuccess (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))), remaining, false) //This could be the end of expression
+                    (ExpressionParsingSuccess (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))), remaining, isOpened) //This could be the end of expression
                 | None ->
-                    (ExpressionParsingFailure (MissingOperator input), input, false)//Just returning the stackExp, but the program doesn't know what to do with the the parsed constMatched
+                    (ExpressionParsingFailure (MissingOperator input), input, isOpened)//Just returning the stackExp, but the program doesn't know what to do with the the parsed constMatched
             | _ ->
                 (ExpressionParsingFailure (UnhandledInput input), input, false)//Unhandled cases viz UnaryExpressions, InvalidInput
     | Failure (_) ->
         if isOpened then
-            (ExpressionParsingFailure (InsufficientParanthesis input), input, false)//Possibly throw an error here
+            (ExpressionParsingFailure (InsufficientParanthesis input), input, isOpened)//Possibly throw an error here
         else
             match stackExp with
             | Some someStackExp ->
-                (ExpressionParsingSuccess stackExp,input, false)//Every expression is designed to terminate from here or from any of the None lines
+                (ExpressionParsingSuccess stackExp,input, isOpened)//Every expression is designed to terminate from here or from any of the None lines
             | None ->
-                (ExpressionParsingFailure (EmptyParanthesis input), input, false)
+                (ExpressionParsingFailure (EmptyParanthesis input), input, isOpened)
 
  
 let listPatternMatching =
@@ -502,8 +513,8 @@ let examplesForMathematicalExpressionParser =
             .Add("8/4", 2.)
             .Add("2 -4 +6 -1 -1- 0 +8", 10.)
             .Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6.)
-            .Add("2 -4 +6 -1 -1- 0 +8", 10.)
-            .Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6.)
+            //.Add("2 -4 +6 -1 -1- 0 +8", 10.)
+            //.Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6.)
             .Add(" 2*3 - 4*5 + 6/3 ", -12.)
             .Add("2*3*4/8 -   5/2*4 +  6 + 0/3   ", -1.)
             .Add("10/4", 2.5)
@@ -537,7 +548,7 @@ let examplesForMathematicalExpressionParser =
     let parsedExpression2 exp = tryParseMathExpressionWithMemoryOp exp (None) (None) (None) (false)
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
-    //let listOfExpressions = ["(( ((2)) + 4))*((5))"]
+    let listOfExpressions = ["((23 + 22) + 53)"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> 
@@ -549,14 +560,16 @@ let examplesForMathematicalExpressionParser =
                 (EvaluationFailure (ParsingError failure)) ))
             
     listPatternMatching |> ignore
-    //listOfExpressions |> List.iter printResult
+    listOfExpressions |> List.iter printResult
     let mutable countOfFailed = 0
+    let mutable countOfSuccess = 0
     let printFailureCase (key:string) (expectedValue: double) =
         let evaluatedResult = parseAndEvaluateExpression key
         match evaluatedResult with
         | EvaluationFailure someString, _ ->
-            printfn "Failure to evaluate %s" key
-            printfn "\nEvaluation Failure message : %A" someString
+            printfn "\nFailure to evaluate %s" key
+            printfn "Evaluation Failure message : %A" someString
+            countOfFailed <- countOfFailed + 1
         | EvaluationSuccess evaluatedValue , remaining ->
             if remaining.Trim().Length > 0 then
                 printfn "The following expression evaluated successfully but some text remaining"
@@ -570,6 +583,30 @@ let examplesForMathematicalExpressionParser =
                 printfn "Obtained value : %A" evaluatedValue
                 countOfFailed <- countOfFailed + 1
 
-    successTestCases |> Map.iter printFailureCase
+    let printAllCases (key:string) (expectedValue: double) =
+        let evaluatedResult = parseAndEvaluateExpression key
+        match evaluatedResult with
+        | EvaluationFailure someString, _ ->
+            printfn "\nFailure to evaluate %s" key
+            printfn "Evaluation Failure message : %A" someString
+            countOfFailed <- countOfFailed + 1
+        | EvaluationSuccess evaluatedValue , remaining ->
+            if remaining.Trim().Length > 0 then
+                printfn "The following expression evaluated successfully but some text remaining"
+                printfn "Expression : %A" key
+                printfn "Remaining String : %A" remaining
+            else
+                printfn "Expression : %A" key
+                printfn "Expected value : %A" expectedValue
+                printfn "Obtained value : %A" evaluatedValue
+                printfn "Result : %A" (if expectedValue = evaluatedValue then "Success" else "Failure")
+                if expectedValue = evaluatedValue then
+                    countOfFailed <- countOfFailed + 1
+                else
+                    countOfSuccess <- countOfSuccess + 1
+
+
+    successTestCases |> Map.iter printAllCases
 
     printfn "\n\nNumber of failed cases : %A " countOfFailed
+    printfn "Number of success cases : %A " countOfSuccess
