@@ -272,6 +272,12 @@ let rec EvaluateExpression (exp: Expression option) =
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
+let parseAndEvaluateExpression (expressionString) = 
+    let parsedExpression = tryParseMathExpression expressionString (None) (None)
+    parsedExpression
+    |> fun(exp, remainingString) ->
+        ((EvaluateExpression exp), remainingString)
+
 let examplesForMathematicalExpressionParser =
     let exp1 = "23"
     let exp2 = "23 + 42"
@@ -287,6 +293,20 @@ let examplesForMathematicalExpressionParser =
 
     let successTestCasesResults = 
         Map.empty
+            //Region begin - TestcasesCreated by me
+            .Add("23", 23. |> double)
+            .Add("23 + 42",65.)
+            .Add("(23 + 42)",65.)
+            .Add("(23 + (22 + 43))",88.)
+            .Add("(23 + 22) + 53",98.)
+            .Add("((23 + 22) + 53)",98.)
+            .Add("(23 + 24) + (25 + 26)",98.)
+            .Add("21 + 22 + 23 + 24 + 25 + 26",141.)
+            .Add("1 + 2 * 3 + 5 + 6 * 8",60.)
+            .Add("1 - 2 * 3",-5.)
+            .Add("1*(-3)",-3.)
+            //Region end - TestcasesCreated by me
+            //Region begin - TestCases from 
             .Add("2 + 3", 5. |> double)
             .Add("2 * 3",6.)
             .Add("89", 89.0)
@@ -318,7 +338,7 @@ let examplesForMathematicalExpressionParser =
             .Add("(2) + (17*2-30) * (5)+2 - (8/2)*4", 8.)
             .Add("(((((5)))))", 5.)
             .Add("(( ((2)) + 4))*((5))", 30.)
-            
+            //End region - Testcases from
 
     let errorCases = 
         Map.empty
@@ -343,4 +363,27 @@ let examplesForMathematicalExpressionParser =
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> (fun (exp, remainingString) -> (EvaluateExpression exp)))
     listPatternMatching |> ignore
-    listOfExpressions |> List.iter printResult
+    //listOfExpressions |> List.iter printResult
+    let mutable countOfFailed = 0
+    let printFailureCase (key:string) (expectedValue: double) =
+        let evaluatedResult = parseAndEvaluateExpression key
+        match evaluatedResult with
+        | EvaluationFailure someString, _ ->
+            printfn "Failure to evaluate %s" key
+            printfn "\nEvaluation Failure message : %A" someString
+        | EvaluationSuccess evaluatedValue , remaining ->
+            if remaining.Trim().Length > 0 then
+                printfn "The following expression evaluated successfully but some text remaining"
+                printfn "Expression : %A" key
+                printfn "Remaining String : %A" remaining
+
+            if evaluatedValue <> expectedValue then
+                printfn "The following expression does not evaluate to the expected value :"
+                printfn "Expression : %A" key
+                printfn "Expected value : %A" expectedValue
+                printfn "Obtained value : %A" evaluatedValue
+                countOfFailed <- countOfFailed + 1
+
+    successTestCasesResults |> Map.iter printFailureCase
+
+    printfn "\n\nNumber of failed cases : %A " countOfFailed
