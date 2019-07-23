@@ -22,21 +22,35 @@ type Brackets =
     | BracketClose
 
 type Expression = 
-    | Constant of int
+    | Constant of double
     | BinaryExpression of Expression*BinaryOperator*Expression
     | UnaryExpression of UnaryOperator * Expression
 
 type Token = 
-    | Constant of int
+    //| IntConstant of int
+    | DoubleConstant of double
     | BinaryOperator of BinaryOperator
     | Bracket of Brackets
 
-let intToUnion input =
-    Token.Constant input
+//let intToUnion input =
+    //Token.IntConstant input
 
-let parseConstant = 
-    many1 parseDigit 
-    |>> (fun (charList) -> String(List.toArray(charList)) |> int |> intToUnion)
+let doubleToUnion input =
+    Token.DoubleConstant input
+
+//let parseConstant = 
+//    many1 parseDigit 
+//    |>> (fun (charList) -> String(List.toArray(charList)) |> int |> intToUnion)
+
+let parseDouble =
+    (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
+    |>> (fun (wholeNums, decimalPart) ->
+        match decimalPart with
+        | Some (decimalPoint, decimalPartDigits) ->
+            String(List.toArray(wholeNums @ [decimalPoint] @ decimalPartDigits))
+            |> double |> doubleToUnion
+        | None ->
+            String(List.toArray(wholeNums)) |> double |> doubleToUnion)
 
 let arithmeticOps = 
         ['+';'-';'/';'*']
@@ -72,7 +86,7 @@ let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
 let parseSpaces = many (pChar ' ') 
 let parseAToken = 
-    parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseConstant)
+    parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble)
 
 let parseTwoTokens =
     (parseAToken .>>. parseAToken)
@@ -129,9 +143,33 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
         | None ->
             (stackExp, finalRemaining)//This is not expected when user enters multiplication even before brackets
     | Success (Token.BinaryOperator opMatched, remaining) ->
-        let (resultToEnd, finalRemaining) = (tryParseMathExpression remaining (stackExp) (Some opMatched))
-        (resultToEnd, finalRemaining)
-    | Success (Token.Constant constMatched, remaining) ->
+        match opMatched with
+        | Minus ->
+            match stackExp with
+            | None ->
+                match stackOp with
+                | None ->
+                    let subResult = run parseAToken remaining
+                    match subResult with
+                    | Success (Token.DoubleConstant someConstant, remainingSub) ->
+                        let newStackExp = Some (Expression.Constant (someConstant * -1.0))
+                        (tryParseMathExpression remainingSub (newStackExp) (None))
+                    | Failure _ ->
+                        (None , input) //This case when minus symbol is not followed by any token
+                    | _ ->
+                        (None, input) //This case when minus symbole is followed by a non-digit
+                | _ ->
+                    (None, input) // When a operator is matched stackOp should have been empty
+            | Some someStackExp ->
+                match stackOp with
+                | None ->
+                    (tryParseMathExpression remaining (stackExp) (Some opMatched))
+                | Some _ ->
+                    (None, input) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
+        | _ ->
+            //More cases of check can be better
+            (tryParseMathExpression remaining (stackExp) (Some opMatched))
+    | Success (Token.DoubleConstant constMatched, remaining) ->
         match stackExp with
         | None ->
             let (resultToEnd, finalRemaining) = (tryParseMathExpression remaining (Some (Expression.Constant constMatched)) (None))
@@ -143,28 +181,38 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 //Compare the priorities
                 //If matched priority is higher then stackExp operator (tryParseMathExpression)
                 //Otherwise tryParseMathExpression remainingCase1 (Expression of stackExp stackOp constMatched) (opMatched)
-                if (getPriority opMatched) > (getPriority stackOp.Value) then
-                    let resultToEnd, remainingCase1 = tryParseMathExpression remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched)
-                    (Some (Expression.BinaryExpression (someStackExp, stackOp.Value, resultToEnd.Value)), remainingCase1)
-                else
-                    let resultToEnd, remainingCase2 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, stackOp.Value, Expression.Constant constMatched))) (Some opMatched)
-                    (resultToEnd, remainingCase2)
+
+                match stackOp with
+                | Some someStackOp ->
+                    if (getPriority opMatched) > (getPriority someStackOp) then
+                        let resultToEnd, remainingCase1 = tryParseMathExpression remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched)
+                        match resultToEnd with
+                        |Some someResultToEnd ->
+                            (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToEnd)), remainingCase1)
+                        | None ->
+                            (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                    else
+                        let resultToEnd, remainingCase2 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (Some opMatched)
+                        (resultToEnd, remainingCase2)
+                | None ->
+                    (None, input) //Unexpected code during proper input This is possible during negative number input//When a constant is matched there should either have been (some stackExp and some stackOp) or (None stackExp and None stackOp)//The first either or case fails here
+                    
             | Success (Token.Bracket BracketClose, remainingCase2) ->
                 match stackOp with
                 | Some someStackOp ->
                     tryParseMathExpression remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None)
                 | _ -> 
-                    (None, input)
+                    (None, input)//Empty expressions
             | Failure _ ->
                 match stackOp with
                 | Some someStackOp ->
-                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched)), remaining)
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched)), remaining) //This could be the end of expression
                 | None ->
-                    (stackExp, input)//Unexpected code block during proper input
+                    (stackExp, input)//Just returning the stackExp, but the program doesn't know what to do with the the parsed constMatched
             | _ ->
-                (None, input)//Unexpected code block during proper input
+                (None, input)//Unhandled cases viz UnaryExpressions, InvalidInput
     | Failure (_) ->
-        (stackExp,input)
+        (stackExp,input)//Every expression is designed to terminate from here or from any of the None lines
 
  
 let listPatternMatching =
@@ -176,6 +224,54 @@ let listPatternMatching =
         printfn "No, not possible" 
         0
 
+
+
+type ExpressionEvaluationError =
+    | UnexpectedToken of string
+    | InvalidOperatorUse of string
+    | UnRecognizedToken of string
+    | DivideByZeroAttempted of string
+    | UnBalancedParanthesis of string
+
+type ExpressionEvaluationResult =
+    | EvaluationSuccess of double
+    | EvaluationFailure of ExpressionEvaluationError
+
+let computeBinaryExpression operand1 operator operand2 =
+    match operator with
+    | Plus ->
+        EvaluationSuccess (operand1 + operand2)
+    | Minus ->
+        EvaluationSuccess (operand1 - operand2)
+    | Multiply ->
+        EvaluationSuccess (operand1 * operand2)
+    | Divide ->
+        if operand2 = 0. then
+            EvaluationFailure (DivideByZeroAttempted ("Expression tried to evaluate : " + operand1.ToString() + operator.ToString() + operand2.ToString()))
+        else
+            EvaluationSuccess (operand1 / operand2)
+
+let rec EvaluateExpression (exp: Expression option) =
+    match exp with
+    | Some someExp ->
+        match someExp with
+        | Constant doubleConstant ->
+            EvaluationSuccess doubleConstant
+        | BinaryExpression (exp1, operator, exp2) ->
+            let exp1Result = EvaluateExpression (Some exp1)
+            let exp2Result = EvaluateExpression (Some exp2)
+            match (exp1Result, exp2Result) with
+            | (EvaluationSuccess exp1Dbl, EvaluationSuccess exp2Dbl) ->
+                computeBinaryExpression exp1Dbl operator exp2Dbl
+            | (EvaluationFailure failure, _) ->
+                EvaluationFailure failure
+            | (_ , EvaluationFailure failure) ->
+                EvaluationFailure failure
+        | _ ->
+            EvaluationFailure (UnRecognizedToken "NotImplemented")
+    | None ->
+        EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
+
 let examplesForMathematicalExpressionParser =
     let exp1 = "23"
     let exp2 = "23 + 42"
@@ -186,51 +282,65 @@ let examplesForMathematicalExpressionParser =
     let exp7 = "(23 + 24) + (25 + 26)"
     let exp8 = "21 + 22 + 23 + 24 + 25 + 26"
     let exp9 = "1 + 2 * 3 + 5 + 6 * 8"
+    let exp10 = "1 - 2 * 3"
+    let exp11 = "1*(-3)"
 
-    let testCases = new Map<string,double>()
-    testCases.Add("2 + 3",5)
-    testCases.Add("2 * 3",6)
-    testCases.Add("89",89)
-    testCases.Add("   12        -  8   ", 4)
-    testCases.Add("142        -9   ", 133)
-    testCases.Add("72+  15", 87)
-    testCases.Add(" 12*  4", 48)
-    testCases.Add(" 50/10", 5)
-    testCases.Add("2.5", 2.5)
-    testCases.Add("4*2.5 + 8.5+1.5 / 3.0", 19)
-    testCases.Add("5.0005 + 0.0095", 5.01)
-    testCases.Add("67+2", 69)
-    testCases.Add(" 2-7", -5)
-    testCases.Add("5*7 ", 35)
-    testCases.Add("8/4", 2)
-    testCases.Add("2 -4 +6 -1 -1- 0 +8", 10)
-    testCases.Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6)
-    testCases.Add("2 -4 +6 -1 -1- 0 +8", 10)
-    testCases.Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6)
-    testCases.Add(" 2*3 - 4*5 + 6/3 ", -12)
-    testCases.Add("2*3*4/8 -   5/2*4 +  6 + 0/3   ", -1)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
-    //testCases.Add("",)
+    let successTestCasesResults = 
+        Map.empty
+            .Add("2 + 3", 5. |> double)
+            .Add("2 * 3",6.)
+            .Add("89", 89.0)
+            .Add("   12        -  8   ", 4.)
+            .Add("142        -9   ", 133.)
+            .Add("72+  15", 87.)
+            .Add(" 12*  4", 48.)
+            .Add(" 50/10", 5.)
+            .Add("2.5", 2.5)
+            .Add("4*2.5 + 8.5+1.5 / 3.0", 19.)
+            .Add("5.0005 + 0.0095", 5.01)
+            .Add("67+2", 69.)
+            .Add(" 2-7", -5.)
+            .Add("5*7 ", 35.)
+            .Add("8/4", 2.)
+            .Add("2 -4 +6 -1 -1- 0 +8", 10.)
+            .Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6.)
+            .Add("2 -4 +6 -1 -1- 0 +8", 10.)
+            .Add("1 -1   + 2   - 2   +  4 - 4 +    6", 6.)
+            .Add(" 2*3 - 4*5 + 6/3 ", -12.)
+            .Add("2*3*4/8 -   5/2*4 +  6 + 0/3   ", -1.)
+            .Add("10/4", 2.5)
+            .Add("5/3", 1.66)
+            .Add("3 + 8/5 -1 -2*5", -6.4)
+            .Add(" -5 + 2", -3.)
+            .Add("(2)", 2.)
+            .Add("(5 + 2*3 - 1 + 7 * 8)", 66.)
+            .Add("(67 + 2 * 3 - 67 + 2/1 - 7)", 1.)
+            .Add("(2) + (17*2-30) * (5)+2 - (8/2)*4", 8.)
+            .Add("(((((5)))))", 5.)
+            .Add("(( ((2)) + 4))*((5))", 30.)
+            
+
+    let errorCases = 
+        Map.empty
+            .Add("  6 + c", ExpressionEvaluationError.UnRecognizedToken)
+            .Add("  7 & 2", ExpressionEvaluationError.InvalidOperatorUse)
+            .Add("  %", ExpressionEvaluationError.UnexpectedToken)
+            .Add(" 5 + + 6", ExpressionEvaluationError.InvalidOperatorUse)
+            .Add("5/0", ExpressionEvaluationError.DivideByZeroAttempted)
+            .Add(" 2 - 1 + 14/0 + 7", ExpressionEvaluationError.DivideByZeroAttempted)
+            .Add("(5*7/5) + (23) - 5 * (98-4)/(6*7-42)", ExpressionEvaluationError.DivideByZeroAttempted)
+            .Add("2 + (5 * 2", ExpressionEvaluationError.UnBalancedParanthesis)
+            .Add("(((((4))))", ExpressionEvaluationError.UnBalancedParanthesis)
+            .Add("((2)) * ((3", ExpressionEvaluationError.UnBalancedParanthesis)
+            .Add("((9)) * ((1)", ExpressionEvaluationError.UnBalancedParanthesis)
 
     let resultForParseAToken = ((many1 parseAToken) |> run) exp6
     let parsedExpression exp = tryParseExpression exp
     let parsedExpression2 exp = tryParseMathExpression exp (None) (None)
 
-    let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9]
+    let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
     //let listOfExpressions = [exp5]
 
-    let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A" exp (parsedExpression2 exp)
+    let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> (fun (exp, remainingString) -> (EvaluateExpression exp)))
     listPatternMatching |> ignore
     listOfExpressions |> List.iter printResult
