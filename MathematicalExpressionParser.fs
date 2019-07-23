@@ -242,13 +242,13 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
         | Some someResultToOtherEnd ->
             match stackExp with
             | None ->
-                (resultToEndOfBracket, finalRemaining)
+                tryParseMathExpressionWithMemoryOp finalRemaining (resultToEndOfBracket) (None) (memoryOp)
             | Some someStackExp ->
                 match stackOp with
                 | None ->
                     (None, finalRemaining)//This is not expected during valid formula entry
                 | Some someStackOp ->
-                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd)), finalRemaining)
+                    tryParseMathExpressionWithMemoryOp finalRemaining (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd))) (None) (memoryOp)
         | None ->
             (stackExp, finalRemaining)//This is not expected when user enters multiplication even before brackets
     | Success (Token.BinaryOperator opMatched, remaining) ->
@@ -318,9 +318,6 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
                                 tryParseMathExpressionWithMemoryOp remainingCase12 (Some(Expression.BinaryExpression (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched) , opMatched, someResultToEnd))) (None) (memoryOp)
                             | None ->
                                 (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
-                            //(Some (Expression.BinaryExpression (someStackExp, someStackOp, )))
-                            //let resultToEnd, remainingCase12 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (Some opMatched)
-                            //(resultToEnd, remainingCase12)
                         match memoryOp with
                         | Some someMemoryOp ->
                             if (getPriority opMatched > getPriority someMemoryOp) then
@@ -426,7 +423,7 @@ let examplesForMathematicalExpressionParser =
     let exp10 = "1 - 2 * 3"
     let exp11 = "1*(-3)"
 
-    let successTestCasesResults = 
+    let successTestCases = 
         Map.empty
             //Region begin - TestcasesCreated by me
             .Add("23", 23. |> double)
@@ -494,12 +491,12 @@ let examplesForMathematicalExpressionParser =
     let parsedExpression2 exp = tryParseMathExpressionWithMemoryOp exp (None) (None) (None)
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
-    let listOfExpressions = ["(5 + 2*3 - 1 + 7 * 8)"]
+    //let listOfExpressions = ["(( ((2)) + 4))*((5))"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> (fun (exp, remainingString) -> (EvaluateExpression exp)))
     listPatternMatching |> ignore
-    listOfExpressions |> List.iter printResult
+    //listOfExpressions |> List.iter printResult
     let mutable countOfFailed = 0
     let printFailureCase (key:string) (expectedValue: double) =
         let evaluatedResult = parseAndEvaluateExpression key
@@ -520,6 +517,6 @@ let examplesForMathematicalExpressionParser =
                 printfn "Obtained value : %A" evaluatedValue
                 countOfFailed <- countOfFailed + 1
 
-    successTestCasesResults |> Map.iter printFailureCase
+    successTestCases |> Map.iter printFailureCase
 
     printfn "\n\nNumber of failed cases : %A " countOfFailed
