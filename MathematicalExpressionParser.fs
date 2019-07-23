@@ -185,15 +185,28 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 match stackOp with
                 | Some someStackOp ->
                     if (getPriority opMatched) > (getPriority someStackOp) then
-                        let resultToEnd, remainingCase1 = tryParseMathExpression remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched)
+                        let resultToEnd, remainingCase11 = tryParseMathExpression remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched)
                         match resultToEnd with
                         |Some someResultToEnd ->
-                            (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToEnd)), remainingCase1)
+                            //This block is written to handle the case "2*3 - 4*5 + 6/3" which without this block would get evaluated to "2*3 - (4*5 + 6/3)
+                            match someResultToEnd with
+                            | BinaryExpression (innerBinExpOperand1, innerBinExpOperator, innerBinExpOperand2) ->
+                                let firstExpressionFormed = BinaryExpression (someStackExp, someStackOp, innerBinExpOperand1)
+                                (Some (Expression.BinaryExpression (firstExpressionFormed, innerBinExpOperator, innerBinExpOperand2)), remainingCase11)
+                            | Constant innerDoubleValue ->
+                                (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant innerDoubleValue)), remainingCase11)
                         | None ->
                             (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
                     else
-                        let resultToEnd, remainingCase2 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (Some opMatched)
-                        (resultToEnd, remainingCase2)
+                        let resultToEnd, remainingCase12 = tryParseMathExpression remainingCase1 (None) (None)
+                        match resultToEnd with
+                        |Some someResultToEnd ->
+                            (Some (Expression.BinaryExpression (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched) , opMatched, someResultToEnd)), remainingCase12)
+                        | None ->
+                            (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                        //(Some (Expression.BinaryExpression (someStackExp, someStackOp, )))
+                        //let resultToEnd, remainingCase12 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (Some opMatched)
+                        //(resultToEnd, remainingCase12)
                 | None ->
                     (None, input) //Unexpected code during proper input This is possible during negative number input//When a constant is matched there should either have been (some stackExp and some stackOp) or (None stackExp and None stackOp)//The first either or case fails here
                     
@@ -201,6 +214,128 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 match stackOp with
                 | Some someStackOp ->
                     tryParseMathExpression remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None)
+                | _ -> 
+                    (None, input)//Empty expressions
+            | Failure _ ->
+                match stackOp with
+                | Some someStackOp ->
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched)), remaining) //This could be the end of expression
+                | None ->
+                    (stackExp, input)//Just returning the stackExp, but the program doesn't know what to do with the the parsed constMatched
+            | _ ->
+                (None, input)//Unhandled cases viz UnaryExpressions, InvalidInput
+    | Failure (_) ->
+        (stackExp,input)//Every expression is designed to terminate from here or from any of the None lines
+
+
+
+//This implementation is a Mathematical expression parser which parses by applying BODMAS
+let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (stackOp: BinaryOperator option) (memoryOp: BinaryOperator option)=
+    let result = run parseAToken input
+    match result with
+    | Success (Token.Bracket BracketClose, remaining) ->
+        //Validate whether stackOp is None - Pending
+        (stackExp,remaining)
+    | Success (Token.Bracket BracketOpen, remaining) ->
+        let (resultToEndOfBracket, finalRemaining) = tryParseMathExpressionWithMemoryOp remaining (None) (None) (memoryOp)
+        match resultToEndOfBracket with
+        | Some someResultToOtherEnd ->
+            match stackExp with
+            | None ->
+                (resultToEndOfBracket, finalRemaining)
+            | Some someStackExp ->
+                match stackOp with
+                | None ->
+                    (None, finalRemaining)//This is not expected during valid formula entry
+                | Some someStackOp ->
+                    (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToOtherEnd)), finalRemaining)
+        | None ->
+            (stackExp, finalRemaining)//This is not expected when user enters multiplication even before brackets
+    | Success (Token.BinaryOperator opMatched, remaining) ->
+        let opMatchedHandlingWithoutMemory = fun() ->
+            match opMatched with
+            | Minus ->
+                match stackExp with
+                | None ->
+                    match stackOp with
+                    | None ->
+                        let subResult = run parseAToken remaining
+                        match subResult with
+                        | Success (Token.DoubleConstant someConstant, remainingSub) ->
+                            let newStackExp = Some (Expression.Constant (someConstant * -1.0))
+                            (tryParseMathExpressionWithMemoryOp remainingSub (newStackExp) (None) (memoryOp))
+                        | Failure _ ->
+                            (None , input) //This case when minus symbol is not followed by any token
+                        | _ ->
+                            (None, input) //This case when minus symbole is followed by a non-digit
+                    | _ ->
+                        (None, input) // When a operator is matched stackOp should have been empty
+                | Some someStackExp ->
+                    match stackOp with
+                    | None ->
+                        (tryParseMathExpressionWithMemoryOp remaining (stackExp) (Some opMatched) (memoryOp))
+                    | Some _ ->
+                        (None, input) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
+            | _ ->
+                //More cases of check can be better
+                (tryParseMathExpressionWithMemoryOp remaining (stackExp) (Some opMatched) (memoryOp))
+
+        match memoryOp with
+        | Some someMemoryOp ->
+            if getPriority opMatched <= getPriority someMemoryOp then
+                (stackExp, input)
+            else 
+                opMatchedHandlingWithoutMemory()
+        | None ->
+            opMatchedHandlingWithoutMemory()
+    | Success (Token.DoubleConstant constMatched, remaining) ->
+        match stackExp with
+        | None ->
+            let (resultToEnd, finalRemaining) = (tryParseMathExpressionWithMemoryOp remaining (Some (Expression.Constant constMatched)) (None) (memoryOp))
+            (resultToEnd, finalRemaining)
+        | Some someStackExp ->
+            let constMatchedCaseResult = run parseAToken remaining
+            match constMatchedCaseResult with
+            | Success (Token.BinaryOperator opMatched, remainingCase1) ->
+                //Compare the priorities
+                //If matched priority is higher then stackExp operator (tryParseMathExpression)
+                //Otherwise tryParseMathExpression remainingCase1 (Expression of stackExp stackOp constMatched) (opMatched)
+
+                match (stackOp) with
+                | Some someStackOp ->
+                    if (getPriority opMatched) > (getPriority someStackOp) then
+                        let resultToEnd, remainingCase11 = tryParseMathExpressionWithMemoryOp remainingCase1 (Some (Expression.Constant constMatched)) (Some opMatched) (stackOp)
+                        match resultToEnd with
+                        |Some someResultToEnd ->
+                            tryParseMathExpressionWithMemoryOp remainingCase11 (Some (Expression.BinaryExpression (someStackExp, someStackOp, someResultToEnd))) (None) (memoryOp)
+                        | None ->
+                            (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                    else
+                        let constMatchHandlingWithoutMemoryOp = fun() ->
+                            let resultToEnd, remainingCase12 = tryParseMathExpressionWithMemoryOp remainingCase1 (None) (None) (Some opMatched)
+                            match resultToEnd with
+                            |Some someResultToEnd ->
+                                tryParseMathExpressionWithMemoryOp remainingCase12 (Some(Expression.BinaryExpression (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched) , opMatched, someResultToEnd))) (None) (memoryOp)
+                            | None ->
+                                (None, input) //Problem with evaluating remainder of expression but now the program doesn't know what to do with the some stackExp and some stackOp
+                            //(Some (Expression.BinaryExpression (someStackExp, someStackOp, )))
+                            //let resultToEnd, remainingCase12 = tryParseMathExpression remainingCase1 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (Some opMatched)
+                            //(resultToEnd, remainingCase12)
+                        match memoryOp with
+                        | Some someMemoryOp ->
+                            if (getPriority opMatched > getPriority someMemoryOp) then
+                                constMatchHandlingWithoutMemoryOp()
+                            else
+                                (Some(BinaryExpression (someStackExp, someStackOp, Constant constMatched)),remaining)
+                        | None ->
+                            constMatchHandlingWithoutMemoryOp()
+                | None ->
+                    (None, input) //Unexpected code during proper input This is possible during negative number input//When a constant is matched there should either have been (some stackExp and some stackOp) or (None stackExp and None stackOp)//The first either or case fails here
+                    
+            | Success (Token.Bracket BracketClose, remainingCase2) ->
+                match stackOp with
+                | Some someStackOp ->
+                    tryParseMathExpressionWithMemoryOp remainingCase2 (Some (Expression.BinaryExpression (someStackExp, someStackOp, Expression.Constant constMatched))) (None) (memoryOp)
                 | _ -> 
                     (None, input)//Empty expressions
             | Failure _ ->
@@ -273,7 +408,7 @@ let rec EvaluateExpression (exp: Expression option) =
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
 let parseAndEvaluateExpression (expressionString) = 
-    let parsedExpression = tryParseMathExpression expressionString (None) (None)
+    let parsedExpression = tryParseMathExpressionWithMemoryOp expressionString (None) (None) (None)
     parsedExpression
     |> fun(exp, remainingString) ->
         ((EvaluateExpression exp), remainingString)
@@ -356,14 +491,15 @@ let examplesForMathematicalExpressionParser =
 
     let resultForParseAToken = ((many1 parseAToken) |> run) exp6
     let parsedExpression exp = tryParseExpression exp
-    let parsedExpression2 exp = tryParseMathExpression exp (None) (None)
+    let parsedExpression2 exp = tryParseMathExpressionWithMemoryOp exp (None) (None) (None)
 
-    let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
-    //let listOfExpressions = [exp5]
+    //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
+    let listOfExpressions = ["(5 + 2*3 - 1 + 7 * 8)"]
+    //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> (fun (exp, remainingString) -> (EvaluateExpression exp)))
     listPatternMatching |> ignore
-    //listOfExpressions |> List.iter printResult
+    listOfExpressions |> List.iter printResult
     let mutable countOfFailed = 0
     let printFailureCase (key:string) (expectedValue: double) =
         let evaluatedResult = parseAndEvaluateExpression key
