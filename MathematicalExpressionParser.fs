@@ -254,7 +254,7 @@ let rec tryParseMathExpressionWithMemoryOp input (stackExp:Expression option) (s
         else
             (ExpressionParsingFailure (TooManyParanthesis input) , input, isOpened)//Not changing the state of isOpened as it's no more possible to close
     | Success (Token.Bracket BracketOpen, remaining) ->
-        let (resultToEndOfBracket, finalRemaining, isResultOpened) = tryParseMathExpressionWithMemoryOp remaining (None) (None) (memoryOp) (true)
+        let (resultToEndOfBracket, finalRemaining, isResultOpened) = tryParseMathExpressionWithMemoryOp remaining (None) (None) (None) (true)
         if isResultOpened then
             (ExpressionParsingFailure (InsufficientParanthesis input), input, isResultOpened)
         else
@@ -494,6 +494,7 @@ let examplesForMathematicalExpressionParser =
             .Add("1 + 2 * 3 + 5 + 6 * 8",60.)
             .Add("1 - 2 * 3",-5.)
             .Add("1*(-3)",-3.)
+            .Add("(1 + 2 + 3 * 3 * (1 + 2))", 30.)
             //Region end - TestcasesCreated by me
             //Region begin - TestCases from 
             .Add("2 + 3", 5. |> double)
@@ -548,7 +549,7 @@ let examplesForMathematicalExpressionParser =
     let parsedExpression2 exp = tryParseMathExpressionWithMemoryOp exp (None) (None) (None) (false)
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
-    let listOfExpressions = ["((23 + 22) + 53)"]
+    let listOfExpressions = ["(1 + 2 + 3 * 3 * (1 + 2))"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> 
