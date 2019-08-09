@@ -2,7 +2,11 @@
 open System
 open ParserBuildingBlocks
 
-let variables = dict [
+//Master variables to handle the case of exception when empty list of variables is passed
+let masterVariableKey = "pi"
+let masterVariableValue = "3.143"
+
+let mutable variables = dict [
                 "variableA","1"; 
                 "variableB","2"; 
                 "variableC", "variableB * variableB"
@@ -85,9 +89,8 @@ let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
 let variableNameToToken inputString =
     Variable (inputString)
-        
 
-let parseVariable =
+let parseVariable = fun() ->
     variables.Keys
     |> Seq.sortByDescending (fun x -> x.Length)
     |> Seq.map (fun x -> pString x)
@@ -96,11 +99,11 @@ let parseVariable =
     |>> variableNameToToken
 
 let parseSpaces = many (pChar ' ') 
-let parseAToken = 
-    parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> parseVariable)
+let parseAToken = fun() ->
+    parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()))
 
 let parseTwoTokens =
-    (parseAToken .>>. parseAToken)
+    (parseAToken() .>>. parseAToken())
 
 type EntryType = 
     | Token of Token
@@ -142,7 +145,7 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
         | None ->
             (tryParseMathExpression remaining (Some expression) (None) (memoryOp) (isOpened) variablesRefPassed)
         | Some someStackExp ->
-            let expressionMatchedCaseResult = run parseAToken remaining
+            let expressionMatchedCaseResult = run (parseAToken()) remaining
             match expressionMatchedCaseResult with
             | Success (Token.BinaryOperator opMatched, remainingCase1) ->
                 //Compare the priorities
@@ -200,7 +203,7 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
             | _ ->
                 (ExpressionParsingFailure (UnhandledInput input), input, false, variablesRefPassed)//Unhandled cases viz UnaryExpressions, InvalidInput
 
-    let result = run parseAToken input
+    let result = run (parseAToken()) input
     match result with
     | Success (Token.Bracket BracketClose, remaining) ->
         //Validate whether stackOp is None - Pending
@@ -239,7 +242,7 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 | None ->
                     match stackOp with
                     | None ->
-                        let subResult = run parseAToken remaining
+                        let subResult = run (parseAToken()) remaining
                         match subResult with
                         | Success (Token.DoubleConstant someConstant, remainingSub) ->
                             let newStackExp = Some (Expression.Constant (someConstant * -1.0))
@@ -370,15 +373,17 @@ let rec EvaluateExpression (exp: Expression option) =
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
-let parseAndEvaluateExpression (expressionString) = 
+let parseAndEvaluateExpression (expressionString) (variablesDict:System.Collections.Generic.IDictionary<string,string>) = 
+    variables <- variablesDict
+    variables.Add(masterVariableKey, masterVariableValue)
     let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
     parsedExpression
     |> fun(expResult, remainingString, _, variablesRef) ->
         match expResult with
         | ExpressionParsingSuccess exp ->
-            ((EvaluateExpression exp), remainingString, variablesRef)
+            ((EvaluateExpression exp), remainingString, Seq.ofList variablesRef)
         | ExpressionParsingFailure failure ->
-            (EvaluationFailure (ParsingError failure) , remainingString, variablesRef)
+            (EvaluationFailure (ParsingError failure) , remainingString, Seq.ofList variablesRef)
 
 let examplesForMathematicalExpressionParser =
     let exp1 = "23"
@@ -458,7 +463,7 @@ let examplesForMathematicalExpressionParser =
     let variableTestCases =
         ["variableA + variableB"; "variableC + variableA"]
 
-    let resultForParseAToken = ((many1 parseAToken) |> run) exp6
+    let resultForParseAToken = ((many1 (parseAToken())) |> run) exp6
     let parsedExpression2 exp = tryParseMathExpression exp (None) (None) (None) (false) []
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
@@ -479,7 +484,7 @@ let examplesForMathematicalExpressionParser =
     let mutable countOfFailed = 0
     let mutable countOfSuccess = 0
     let printFailureCase (key:string) (expectedValue: double) =
-        let evaluatedResult = parseAndEvaluateExpression key
+        let evaluatedResult = parseAndEvaluateExpression key variables
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
@@ -500,7 +505,7 @@ let examplesForMathematicalExpressionParser =
                 countOfFailed <- countOfFailed + 1
 
     let printAllCases (key:string) (expectedValue: double) =
-        let evaluatedResult = parseAndEvaluateExpression key
+        let evaluatedResult = parseAndEvaluateExpression key variables
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
@@ -525,7 +530,7 @@ let examplesForMathematicalExpressionParser =
                     
 
     let printResult (key:string) =
-        let evaluatedResult = parseAndEvaluateExpression key
+        let evaluatedResult = parseAndEvaluateExpression key variables
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
