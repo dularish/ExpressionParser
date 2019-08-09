@@ -105,6 +105,7 @@ type MathExpressionParsingFailureType =
     | OperatorNotExpected of string
     | UnhandledInput of string
     | EmptyExpression of string
+    | UnrecognizedInput of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option
@@ -168,8 +169,11 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                     | Some _ ->
                         (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, isOpened) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
             | _ ->
-                //More cases of check can be better
-                (tryParseMathExpression remaining (stackExp) (Some opMatched) (memoryOp) (isOpened))
+                match stackOp with
+                | None ->
+                    (tryParseMathExpression remaining (stackExp) (Some opMatched) (memoryOp) (isOpened))
+                | Some _ ->
+                    (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, isOpened) //When an operator is matched, when stackExp is non-empty, stackOp should have been empty
 
         match memoryOp with
         | Some someMemoryOp ->
@@ -249,11 +253,16 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
         if isOpened then
             (ExpressionParsingFailure (InsufficientParanthesis input), input, isOpened)//Possibly throw an error here
         else
-            match stackExp with
-            | Some someStackExp ->
-                (ExpressionParsingSuccess stackExp,input, isOpened)//Every expression is designed to terminate from here or from any of the None lines
-            | None ->
-                (ExpressionParsingFailure (EmptyParanthesis input), input, isOpened)
+            match input.Trim().Length with
+            | 0 ->
+                //Operator in stackOp but incomplete expression is handled somewhere else
+                match stackExp with
+                | Some someStackExp ->
+                    (ExpressionParsingSuccess stackExp,input, isOpened)//Every expression is designed to terminate from here or from any of the None lines
+                | None ->
+                    (ExpressionParsingFailure (EmptyParanthesis input), input, isOpened)
+            | _ ->
+                (ExpressionParsingFailure (UnrecognizedInput input), input, isOpened)
 
  
 let listPatternMatching =
@@ -407,6 +416,7 @@ let examplesForMathematicalExpressionParser =
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
     //let listOfExpressions = ["(1 + 2 + 3 * 3 * (1 + 2))"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
+    //let listOfExpressions = [" 5 + + 6"]
 
     let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> 
         (fun (expResult, remainingString, someBool) -> 
