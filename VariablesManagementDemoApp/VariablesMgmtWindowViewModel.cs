@@ -33,7 +33,15 @@ namespace VariablesManagementDemoApp
 
         public void AddVariable(string name, string value)
         {
-            if(Variables.Any(s => s.Name == name))
+            if(name.Contains(" "))
+            {
+                throw new Exception("Variable name cannot contain spaces");
+            }
+            else if (string.IsNullOrEmpty(name))
+            {
+                throw new Exception("Cannot add an empty variable");
+            }
+            else if(Variables.Any(s => s.Name == name))
             {
                 throw new Exception("Already a variable exists with the name");
             }

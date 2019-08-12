@@ -26,5 +26,20 @@ namespace VariablesManagementDemoApp
             InitializeComponent();
             this.DataContext = viewModel;
         }
+
+        private void _addVariable_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                viewModel.AddVariable(_variableNameTextBox.Text, _variableValueTextBox.Text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Error occurred! Try again", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+
+            _variableNameTextBox.Clear();
+            _variableValueTextBox.Clear();
+        }
     }
 }

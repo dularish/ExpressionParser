@@ -15,6 +15,10 @@ namespace VariablesManagementDemoApp
         private string _evaluatedValue = string.Empty;
         private DateTime _lastUpdatedDateTime = DateTime.Now;
         private string _name;
+        private bool _isErrorHighlighted;
+        private string _evaluationFailureMessage = "";
+
+        private List<SimpleVar> _dependencyVariables = new List<SimpleVar>();
 
         public string StrValue
         {
@@ -25,31 +29,116 @@ namespace VariablesManagementDemoApp
 
             set
             {
-                if(_strValue != value)
+                _strValue = value;
+                onPropertyChanged();
+
+                bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
+
+                clearDependencyVariables();
+                addDependencyVariables(dependencyVariables);
+
+                if (isEvaluationSuccess)
                 {
-                    _strValue = value;
-                    onPropertyChanged();
-                    EvaluatedValue = evaluate(value);
-                    LastUpdatedDateTime = DateTime.Now;
-                    ValueUpdated?.Invoke(this, EventArgs.Empty);
+                    EvaluatedValue = evaluatedResult;
+                    EvaluationFailureMessage = string.Empty;
                 }
+                else
+                {
+                    EvaluatedValue = string.Empty;
+                    EvaluationFailureMessage = evaluationFailureMessage;
+                }
+                LastUpdatedDateTime = DateTime.Now;
+                ValueUpdated?.Invoke(this, EventArgs.Empty);
             }
+        }
+
+        private void addDependencyVariables(List<SimpleVar> dependencyVariables)
+        {
+            _dependencyVariables.AddRange(dependencyVariables);
+            foreach (var variable in _dependencyVariables)
+            {
+                variable.NameChanged -= Variable_NameChanged;
+                variable.NameChanged += Variable_NameChanged;
+
+                variable.ValueUpdated -= Variable_ValueUpdated;
+                variable.ValueUpdated += Variable_ValueUpdated;
+
+                variable.ValueDestroyed -= Variable_ValueDestroyed;
+                variable.ValueDestroyed += Variable_ValueDestroyed;
+            }
+        }
+
+        private void Variable_ValueDestroyed(object sender, EventArgs e)
+        {
+            StrValue = _strValue;
+        }
+
+        private void Variable_ValueUpdated(object sender, EventArgs e)
+        {
+            StrValue = _strValue;
+        }
+
+        private void Variable_NameChanged(object sender, EventArgs e)
+        {
+            StrValue = _strValue;
+        }
+
+        private void clearDependencyVariables()
+        {
+            foreach (var variable in _dependencyVariables)
+            {
+                variable.NameChanged -= Variable_NameChanged;
+
+                variable.ValueUpdated -= Variable_ValueUpdated;
+
+                variable.ValueDestroyed -= Variable_ValueDestroyed;
+            }
+
+            _dependencyVariables.Clear();
         }
 
         private ObservableCollection<SimpleVar> _centralizedVariablesCollection;
 
-        private string evaluate(string value)
+        private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
             Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.Where(s => s != this).ToDictionary(s => s.Name, s => s.StrValue);
             var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation);
 
+            List<SimpleVar> dependencyVariablesLocal = new List<SimpleVar>();
+
+            foreach (var variableName in parsedOutput.Item3.Distinct())
+            {
+                SimpleVar variableMatched = _centralizedVariablesCollection.Where(s => s.Name == variableName).FirstOrDefault();
+
+                if (variableMatched == null)
+                {
+                    throw new Exception("Unexpected error! Variable " + variableName + " not found");
+                }
+                else
+                {
+                    dependencyVariablesLocal.Add(variableMatched);
+                }
+            }
+
+            dependencyVariables = dependencyVariablesLocal;
+
             if (parsedOutput.Item1.IsEvaluationSuccess)
             {
-                return (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationSuccess).Item.ToString();
+                string evaluatedResultString = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationSuccess).Item.ToString();
+
+                evaluatedResult = evaluatedResultString;
+                evaluationFailureMessage = string.Empty;
+
+                return true;
             }
             else
             {
-                return value;
+                string evaluationErrorMessage = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationFailure).Item.ToString();
+
+                evaluatedResult = string.Empty;
+                evaluationFailureMessage = evaluationErrorMessage;
+
+                return false;
             }
         }
 
@@ -93,6 +182,34 @@ namespace VariablesManagementDemoApp
                     onPropertyChanged();
                     NameChanged?.Invoke(this, EventArgs.Empty);
                 }
+            }
+        }
+
+        public bool IsErrorHighlighted
+        {
+            get { return _isErrorHighlighted; }
+            set
+            {
+                if(_isErrorHighlighted != value)
+                {
+                    _isErrorHighlighted = value;
+                    onPropertyChanged();
+                }
+                
+            }
+        }
+
+        public string EvaluationFailureMessage
+        {
+            get { return _evaluationFailureMessage; }
+            set
+            {
+                if(_evaluationFailureMessage != value)
+                {
+                    _evaluationFailureMessage = value;
+                    onPropertyChanged();
+                }
+                
             }
         }
 
