@@ -12,6 +12,15 @@
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
         <DataGrid x:Name="_dataGridVariables" Grid.Column="0" CanUserAddRows="True" CanUserDeleteRows="True" ItemsSource="{Binding Variables}" AutoGenerateColumns="False" IsSynchronizedWithCurrentItem="True" >
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsErrorHighlighted}" Value="true" >
+                            <Setter Property="Background" Value="MistyRose" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             <DataGrid.Columns>
                 <DataGridTextColumn Header="VariableName" IsReadOnly="True" Binding="{Binding Name}" />
                 <DataGridTextColumn Header="VariableValue" Binding="{Binding StrValue}" />

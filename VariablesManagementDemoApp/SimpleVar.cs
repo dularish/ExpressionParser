@@ -41,11 +41,13 @@ namespace VariablesManagementDemoApp
                 {
                     EvaluatedValue = evaluatedResult;
                     EvaluationFailureMessage = string.Empty;
+                    IsErrorHighlighted = false;
                 }
                 else
                 {
                     EvaluatedValue = string.Empty;
                     EvaluationFailureMessage = evaluationFailureMessage;
+                    IsErrorHighlighted = true;
                 }
                 LastUpdatedDateTime = DateTime.Now;
                 ValueUpdated?.Invoke(this, EventArgs.Empty);
