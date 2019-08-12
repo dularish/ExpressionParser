@@ -2,10 +2,6 @@
 open System
 open ParserBuildingBlocks
 
-//Master variables to handle the case of exception when empty list of variables is passed
-let masterVariableKey = "pi"
-let masterVariableValue = "3.143"
-
 let mutable variables = dict [
                 "variableA","1"; 
                 "variableB","2"; 
@@ -100,7 +96,10 @@ let parseVariable = fun() ->
 
 let parseSpaces = many (pChar ' ') 
 let parseAToken = fun() ->
-    parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()))
+    if variables.Count > 0 then
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()))
+    else
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble)
 
 let parseTwoTokens =
     (parseAToken() .>>. parseAToken())
@@ -375,7 +374,6 @@ let rec EvaluateExpression (exp: Expression option) =
 
 let parseAndEvaluateExpression (expressionString) (variablesDict:System.Collections.Generic.IDictionary<string,string>) = 
     variables <- variablesDict
-    variables.Add(masterVariableKey, masterVariableValue)
     let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
     parsedExpression
     |> fun(expResult, remainingString, _, variablesRef) ->
