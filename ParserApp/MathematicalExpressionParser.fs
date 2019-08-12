@@ -1,12 +1,17 @@
 ﻿module MathematicalExpressionParser
 open System
 open ParserBuildingBlocks
+open System.Collections.Generic
 
 let mutable variables = dict [
-                "variableA","1"; 
-                "variableB","2"; 
+                "variableA", "1";
+                "variableB", "2";
                 "variableC", "variableB * variableB"
                 ]
+
+let masterVariables = dict [
+                "pi", Math.PI.ToString();
+                "e", Math.E.ToString()]
 
 type BinaryOperator =
     | Plus
@@ -15,9 +20,25 @@ type BinaryOperator =
     | Multiply
 
 type UnaryOperator = 
-    | Decrement
-    | Increment
-    | Log10
+    | Exp
+    | Sin
+    | Cos
+    | Tan
+    | ASin
+    | ACos
+    | ATan
+    | Sinh
+    | Cosh
+    | Tanh
+    | ASinh
+    | ACosh
+    | ATanh
+    | Log
+    | Ln
+    | Floor
+    | Ceil
+    | Sqrt
+    | Abs
 
 type Operator =
     | BinaryOperator of BinaryOperator
@@ -35,8 +56,10 @@ type Expression =
 type Token = 
     | DoubleConstant of double
     | BinaryOperator of BinaryOperator
+    | UnaryOperator of UnaryOperator
     | Bracket of Brackets
     | Variable of string
+    | MasterKeywordVariable of string
 
 let doubleToUnion input =
     Token.DoubleConstant input
@@ -54,16 +77,48 @@ let parseDouble =
 let arithmeticOps = 
         ['+';'-';'/';'*']
 
+let unaryOps =
+    ["exp";"sin";"cos";"tan";"acos";"asin";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"log";"ln";"floor";"ceil";"sqrt";"abs"]
+
 let arithmeticCharToUnion input =
     if input = '+' then (BinaryOperator (Plus))
     elif input = '-' then (BinaryOperator (Minus))
     elif input = '*' then (BinaryOperator (Multiply))
     else (BinaryOperator (Divide))
 
+let unaryStrToUnion input =
+    if input = "exp" then (UnaryOperator (Exp))
+    elif input = "sin" then (UnaryOperator (Sin))
+    elif input = "cos" then (UnaryOperator (Cos))
+    elif input = "tan" then (UnaryOperator (Tan))
+    elif input = "asin" then (UnaryOperator (ASin))
+    elif input = "acos" then (UnaryOperator (ACos))
+    elif input = "atan" then (UnaryOperator (ATan))
+    elif input = "sinh" then (UnaryOperator (Sinh))
+    elif input = "cosh" then (UnaryOperator (Cosh))
+    elif input = "tanh" then (UnaryOperator (Tanh))
+    elif input = "asinh" then (UnaryOperator (ASinh))
+    elif input = "acosh" then (UnaryOperator (ACosh))
+    elif input = "atanh" then (UnaryOperator (ATanh))
+    elif input = "log" then (UnaryOperator (Log))
+    elif input = "ln" then (UnaryOperator (Ln))
+    elif input = "floor" then (UnaryOperator (Floor))
+    elif input = "ceil" then (UnaryOperator (Ceil))
+    elif input = "sqrt" then (UnaryOperator (Sqrt))
+    else (UnaryOperator (Abs))
+
 let parseArithmeticOp =
     arithmeticOps
     |> anyOf
     |>> arithmeticCharToUnion
+
+let parseUnaryOp =
+    unaryOps
+    |> Seq.sortByDescending (fun x -> x.Length)
+    |> Seq.map (fun x -> pString x)
+    |> List.ofSeq
+    |> choice
+    |>> unaryStrToUnion
 
 let brackets = 
     ['(';')']
@@ -83,6 +138,17 @@ let parseBrackets inputString=
 let parseCloseBracket = pChar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
+let masterVariableNameToToken inputString =
+    MasterKeywordVariable (inputString)
+
+let parseMasterVariable =
+    masterVariables.Keys
+    |> Seq.sortByDescending (fun x -> x.Length)
+    |> Seq.map (fun x -> pString x)
+    |> List.ofSeq
+    |> choice
+    |>> masterVariableNameToToken
+
 let variableNameToToken inputString =
     Variable (inputString)
 
@@ -97,9 +163,9 @@ let parseVariable = fun() ->
 let parseSpaces = many (pChar ' ') 
 let parseAToken = fun() ->
     if variables.Count > 0 then
-        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()))
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseUnaryOp <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()) <|> parseMasterVariable)
     else
-        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble)
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> parseMasterVariable)
 
 let parseTwoTokens =
     (parseAToken() .>>. parseAToken())
@@ -130,6 +196,7 @@ type MathExpressionParsingFailureType =
     | EmptyVariableExpression of string
     | VariableParsingFailed of string
     | VariableDoesNotExists of string
+    | UnexpectedToken of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option
@@ -200,7 +267,7 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 | None ->
                     (ExpressionParsingFailure (MissingOperator input), input, isOpened, variablesRefPassed)//Just returning the stackExp, but the program doesn't know what to do with the the parsed constMatched
             | _ ->
-                (ExpressionParsingFailure (UnhandledInput input), input, false, variablesRefPassed)//Unhandled cases viz UnaryExpressions, InvalidInput
+                (ExpressionParsingFailure (UnhandledInput input), input, false, variablesRefPassed)//Invalid input, an expression(double/unaryExp/Variable) should be followed by either bracket close or an arithmetic operator
 
     let result = run (parseAToken()) input
     match result with
@@ -277,6 +344,31 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 opMatchedHandlingWithoutMemory()
         | None ->
             opMatchedHandlingWithoutMemory()
+    | Success (Token.UnaryOperator unaryOp, remaining) ->
+        //Trying to parse the next token
+        let nextToken = run (parseAToken()) remaining
+        match nextToken with
+        | Success (Token.Bracket (BracketOpen) , remainingAfterBracketOpen) ->
+            let resultToEndOfBracket, finalRemaining, isResultOpened, resultVariablesRef = tryParseMathExpression remainingAfterBracketOpen (None) (None) (None) (true) []
+            let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
+            if isResultOpened then
+                (ExpressionParsingFailure (InsufficientParanthesis input), input, isResultOpened , totalVariablesRef)
+            else
+                match resultToEndOfBracket with
+                | ExpressionParsingSuccess parsedResult ->
+                    match parsedResult with
+                    | Some someResultToOtherEnd ->
+                        let unaryExpression = UnaryExpression (unaryOp, someResultToOtherEnd)
+                        handleFoundExpression(unaryExpression, finalRemaining, totalVariablesRef)
+                    | None ->
+                        (ExpressionParsingFailure (EmptyExpression input), finalRemaining, isOpened, totalVariablesRef)
+                | ExpressionParsingFailure failure ->
+                    (ExpressionParsingFailure failure, input, isOpened, totalVariablesRef)
+        | Success (Token.DoubleConstant doubleConstant, remainingAfterDoubleConstant) ->
+            let unaryExpression = UnaryExpression (unaryOp, Expression.Constant doubleConstant)
+            handleFoundExpression(unaryExpression, remainingAfterDoubleConstant, refVariables)
+        | _ ->
+            (ExpressionParsingFailure (UnexpectedToken (sprintf "Expected doubleValue or an expression after the unaryOperator %A" unaryOp)), input, isOpened, refVariables)
     | Success (Token.DoubleConstant constMatched, remaining) ->
         handleFoundExpression(Expression.Constant constMatched, remaining, refVariables)
     | Success (Token.Variable variableName, remaining) ->
@@ -298,6 +390,20 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                 (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), input, isOpened, variablesRefPassed)
         else
             (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Variable %s existed during parsing doesn't exists during evaluation" variableName)), input, isOpened, refVariables)
+    | Success (Token.MasterKeywordVariable variableName, remaining) ->
+        if masterVariables.ContainsKey(variableName) then
+            let parserResult, remainingString, isResultOpened, _ = tryParseMathExpression masterVariables.[variableName] (None) (None) (None) (false) []
+            match parserResult with
+            | ExpressionParsingSuccess expOpt ->
+                match expOpt with
+                | Some expression ->
+                    handleFoundExpression(expression, remaining, refVariables)
+                | None ->
+                    (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Master Variable %s does not have an expression" variableName)), input, isOpened, refVariables)
+            | ExpressionParsingFailure failure ->
+                (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the master variable %s" variableName)), input, isOpened, refVariables)
+        else
+            (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Master Variable %s existed during parsing doesn't exists during evaluation" variableName)), input, isOpened, refVariables)
     | Failure (_) ->
         if isOpened then
             (ExpressionParsingFailure (InsufficientParanthesis input), input, isOpened, refVariables)//Possibly throw an error here
@@ -351,6 +457,47 @@ let computeBinaryExpression operand1 operator operand2 =
         else
             EvaluationSuccess (operand1 / operand2)
 
+let computeUnaryExpression operator operand1 =
+    match operator with
+    | Exp ->
+        EvaluationSuccess (Math.Pow(Math.E, operand1))
+    | Sin ->
+        EvaluationSuccess (Math.Sin(operand1))
+    | Cos ->
+        EvaluationSuccess (Math.Cos(operand1))
+    | Tan ->
+        EvaluationSuccess (Math.Tan(operand1))
+    | Sinh ->
+        EvaluationSuccess (Math.Sinh(operand1))
+    | Cosh ->
+        EvaluationSuccess (Math.Cosh(operand1))
+    | Tanh ->
+        EvaluationSuccess (Math.Tanh(operand1))
+    | ASin ->
+        EvaluationSuccess (1./Math.Sin(operand1))
+    | ACos ->
+        EvaluationSuccess (1./Math.Cos(operand1))
+    | ATan ->
+        EvaluationSuccess (1./Math.Tan(operand1))
+    | ASinh ->
+        EvaluationSuccess (1./Math.Sinh(operand1))
+    | ACosh ->
+        EvaluationSuccess (1./Math.Cosh(operand1))
+    | ATanh ->
+        EvaluationSuccess (1./Math.Tanh(operand1))
+    | Log ->
+        EvaluationSuccess (Math.Log10(operand1))
+    | Ln ->
+        EvaluationSuccess (Math.Log(operand1))
+    | Floor ->
+        EvaluationSuccess (Math.Floor(operand1))
+    | Ceil ->
+        EvaluationSuccess (Math.Ceiling(operand1))
+    | Sqrt ->
+        EvaluationSuccess (Math.Sqrt(operand1))
+    | Abs ->
+        EvaluationSuccess (Math.Abs(operand1))
+
 let rec EvaluateExpression (exp: Expression option) =
     match exp with
     | Some someExp ->
@@ -367,12 +514,19 @@ let rec EvaluateExpression (exp: Expression option) =
                 EvaluationFailure failure
             | (_ , EvaluationFailure failure) ->
                 EvaluationFailure failure
+        | UnaryExpression (unaryOp, exp) ->
+            let expResult = EvaluateExpression (Some exp)
+            match expResult with
+            | EvaluationSuccess expDbl ->
+                computeUnaryExpression unaryOp expDbl
+            | EvaluationFailure failure ->
+                EvaluationFailure failure
         | _ ->
             EvaluationFailure (UnRecognizedToken "NotImplemented")
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
-let parseAndEvaluateExpression (expressionString) (variablesDict:System.Collections.Generic.IDictionary<string,string>) = 
+let parseAndEvaluateExpression (expressionString) (variablesDict:IDictionary<string,string>) =
     variables <- variablesDict
     let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
     parsedExpression
