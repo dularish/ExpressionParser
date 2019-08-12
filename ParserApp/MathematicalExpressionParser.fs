@@ -521,8 +521,6 @@ let rec EvaluateExpression (exp: Expression option) =
                 computeUnaryExpression unaryOp expDbl
             | EvaluationFailure failure ->
                 EvaluationFailure failure
-        | _ ->
-            EvaluationFailure (UnRecognizedToken "NotImplemented")
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
