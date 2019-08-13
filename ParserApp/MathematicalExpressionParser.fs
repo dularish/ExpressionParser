@@ -601,7 +601,12 @@ let examplesForMathematicalExpressionParser =
         ["variableA + variableB"; "variableC + variableA"]
 
     let developerDeliberatedNotHandledCases =
-        ["2 + 2(4)"; "(1 + 2)(1 + 4)"; "asin 0"; "2*-2"]
+        [
+        "2 + 2(4)"; //Not supported by existing Simpla expression parser
+        "(1 + 2)(1 + 4)"; //Not supported by existing Simpla expression parser
+        "asin 0"; //Existing Simpla expression parser returns -Infinity
+        "2*-2"//Existing simpla expression parser supports this//If this has to be supported, then the expression "2*--2" would also be supported
+        ]
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
     //let listOfExpressions = ["(1 + 2 + 3 * 3 * (1 + 2))"]
