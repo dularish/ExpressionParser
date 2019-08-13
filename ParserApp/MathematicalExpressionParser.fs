@@ -61,6 +61,10 @@ type Token =
     | Variable of string
     | MasterKeywordVariable of string
 
+type StableToken =
+    | Operator
+    | Expression
+
 let doubleToUnion input =
     Token.DoubleConstant input
 
@@ -198,6 +202,9 @@ type MathExpressionParsingFailureType =
     | VariableDoesNotExists of string
     | UnexpectedToken of string
     | InvalidExpressionTerm of string
+    | InvalidNumberOfExpressionsInStack of string
+    | NotEnoughOperands of string
+    | TooManyOperands of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option
@@ -417,15 +424,181 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
             | _ ->
                 (ExpressionParsingFailure (UnrecognizedInput input), input, isOpened, refVariables)
 
+//This implementation is a Mathematical expression parser which parses by applying BODMAS
+let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp: BinaryOperator list) (openedBracketsCount:int) (refVariables:string list) (lastToken:StableToken option)=
+    
+    let rec getTheNextTermAsExpression = fun(expressionString:string) ->
+        let nextToken = run (parseAToken()) expressionString
+        match nextToken with
+        | Success (Token.Bracket BracketOpen, remainingAfterBracketOpen) ->
+            let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (openedBracketsCount + 1) [] None
+            if numberOfBracketsOpenedInResult > 0 then
+                (ExpressionParsingFailure (InsufficientParanthesis expressionString), expressionString, numberOfBracketsOpenedInResult , resultVariablesRef)
+            else
+                match resultToEndOfBracket with
+                | ExpressionParsingSuccess parsedResult ->
+                    match parsedResult with
+                    | Some someResultToOtherEnd ->
+                        (ExpressionParsingSuccess (parsedResult), finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef)
+                    | None ->
+                        (ExpressionParsingFailure (EmptyExpression expressionString), finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef)
+                | ExpressionParsingFailure failure ->
+                    (ExpressionParsingFailure failure, expressionString, numberOfBracketsOpenedInResult, resultVariablesRef)
+        | Success (Token.DoubleConstant doubleConstant, remainingAfterDoubleConstant) ->
+            (ExpressionParsingSuccess (Some (Expression.Constant doubleConstant)), remainingAfterDoubleConstant, 0, [])
+        | Success (Token.Variable variableName, remainingAfterVariable) ->
+            if variables.ContainsKey(variableName) then
+                let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 variables.[variableName] ([]) ([]) (openedBracketsCount) [] None
+                match parserResult with
+                | ExpressionParsingSuccess expOpt ->
+                    match expOpt with
+                    | Some expression ->
+                        (ExpressionParsingSuccess (expOpt), remainingAfterVariable, 0, [variableName])
+                    | None ->
+                        (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Variable %s does not have an expression" variableName)), expressionString, openedBracketsCount, [])
+                | ExpressionParsingFailure failure ->
+                    (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), expressionString, openedBracketsCount, [])
+            else
+                (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Variable %s existed during parsing doesn't exists during evaluation" variableName)), expressionString, openedBracketsCount, refVariables)
+        | Success (Token.MasterKeywordVariable masterKeywordVariable, remainingAfterMasterVariable) ->
+            if masterVariables.ContainsKey(masterKeywordVariable) then
+                let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 masterVariables.[masterKeywordVariable] ([]) ([]) (0) [] None
+                match parserResult with
+                | ExpressionParsingSuccess expOpt ->
+                    match expOpt with
+                    | Some expression ->
+                        (ExpressionParsingSuccess (expOpt), remainingAfterMasterVariable, 0, [])
+                    | None ->
+                        (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Master Variable %s does not have an expression" masterKeywordVariable)), expressionString, openedBracketsCount, refVariables)
+                | ExpressionParsingFailure failure ->
+                    (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the master variable %s" masterKeywordVariable)), expressionString, openedBracketsCount, refVariables)
+            else
+                (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Master Variable %s existed during parsing doesn't exists during evaluation" masterKeywordVariable)), expressionString, openedBracketsCount, refVariables)
+        | Success (Token.UnaryOperator unaryOp, remainingAfterUnaryOp) ->
+            let expressionTermResult, remainingAfterExprTerm, _, refVariablesInUnaryExp = getTheNextTermAsExpression(remainingAfterUnaryOp)
+            match expressionTermResult with
+            | ExpressionParsingSuccess expOpt ->
+                match expOpt with
+                | Some expression ->
+                    let expressionToReturn = UnaryExpression (unaryOp, expression)
+                    (ExpressionParsingSuccess (Some expressionToReturn), remainingAfterExprTerm, 0, refVariablesInUnaryExp)
+                | None ->
+                    (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Unary operator %A does not have a valid expression" unaryOp)), expressionString, openedBracketsCount, refVariables)
+            | ExpressionParsingFailure failure ->
+                (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the Unary operator %A" unaryOp)), expressionString, openedBracketsCount, refVariables)
+        | _ ->
+            (ExpressionParsingFailure (InvalidExpressionTerm (sprintf "Unable to find a valid expression term in the input string : %A" expressionString)), expressionString, openedBracketsCount, refVariables)
+
+    let result = run (parseAToken()) input
+    match result with
+    | Success (Token.Bracket BracketClose, remaining) ->
+        //Validate whether stackOp is None - Pending
+        if openedBracketsCount > 0 then
+            tryParseMathExpressionByAppr2 remaining stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
+        else
+            (ExpressionParsingFailure (TooManyParanthesis input) , input, openedBracketsCount, refVariables)//Not changing the state of isOpened as it's no more possible to close
+    | Success (Token.Bracket _, _)//This would definitely have to be OpenBracket
+    | Success (Token.DoubleConstant _, _)
+    | Success (Token.MasterKeywordVariable _, _)
+    | Success (Token.Variable _, _)
+    | Success (Token.UnaryOperator _, _) ->
+        let (resultToEndOfBracket, finalRemaining, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(input)
+        let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
+        match resultToEndOfBracket with
+        | ExpressionParsingSuccess parsedResult ->
+            match parsedResult with
+            | Some someResultToOtherEnd ->
+                tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression))
+                //handleFoundExpression(someResultToOtherEnd, finalRemaining, totalVariablesRef)
+            | None ->
+                (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
+        | ExpressionParsingFailure failure ->
+            (ExpressionParsingFailure failure, input, openedBracketsCount, totalVariablesRef)
+    | Success (Token.BinaryOperator opMatched, remaining) ->
+        match lastToken with
+        | None ->
+            match opMatched with
+            | Minus ->
+                let (exprTermResult, remainingAfterExpressionTerm, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(remaining)
+                let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
+                match exprTermResult with
+                | ExpressionParsingSuccess parsedResult ->
+                    match parsedResult with
+                    | Some someResultToOtherEnd ->
+                        let expressionToPass = BinaryExpression ( Expression.Constant (-1.0), BinaryOperator.Multiply, someResultToOtherEnd) 
+                        tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression))
+                    | None ->
+                        (ExpressionParsingFailure (EmptyExpression remaining), input, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
+                | ExpressionParsingFailure failure ->
+                    (ExpressionParsingFailure failure, remaining, openedBracketsCount, totalVariablesRef)
+            | _ ->
+                (ExpressionParsingFailure (OperatorNotExpected remaining), input, openedBracketsCount, refVariables)
+        | Some (StableToken.Expression) ->
+            match stackOp with
+            | [] ->
+                tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
+            | stackTopOp :: restOps ->
+                if getPriority(opMatched) > getPriority(stackTopOp) then
+                    tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
+                else
+                    match stackExp with
+                    | topMostExp :: secondTopExp :: restExps ->
+                        let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
+                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
+                    | _ ->
+                        (ExpressionParsingFailure (NotEnoughOperands remaining), input, openedBracketsCount, refVariables)
+        | Some (StableToken.Operator) ->
+            (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, openedBracketsCount, refVariables)
+    | Failure (_) ->
+        if openedBracketsCount > 0 then
+            (ExpressionParsingFailure (InsufficientParanthesis input), input, openedBracketsCount, refVariables)//Possibly throw an error here
+        else
+            match input.Trim().Length with
+            | 0 ->
+                match stackOp with
+                | stackTopOp :: restOps ->
+                    match stackExp with
+                    | topMostExp :: secondTopExp :: restExps ->
+                        let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
+                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
+                    | _ ->
+                        (ExpressionParsingFailure (NotEnoughOperands input), input, openedBracketsCount, refVariables)
+                | [] ->
+                    match stackExp with
+                    | onlyStackExp :: [] ->
+                        (ExpressionParsingSuccess (Some onlyStackExp),input, openedBracketsCount, refVariables)
+                    | _ ->
+                        (ExpressionParsingFailure (TooManyOperands input), input, openedBracketsCount, refVariables)
+            | _ ->
+                (ExpressionParsingFailure (UnrecognizedInput input), input, openedBracketsCount, refVariables)
+
  
 let listPatternMatching =
     match [1;2;3;4] with
     | first::second::someList::someList2 ->
-        printfn "Multiple matching possible %A %A %A %A" first second someList someList2
-        0
+        printfn "Multiple matching possible with four terms %A %A %A %A" first second someList someList2
     | _ ->
-        printfn "No, not possible" 
-        0
+        printfn "Multiple matching not possible with four terms"
+    match [1;2;3;4] with
+    | first::second::someList::someList2::someList3 ->
+        printfn "Multiple matching possible with five terms %A %A %A %A %A" first second someList someList2 someList3
+    | _ ->
+        printfn "Multiple matching not possible with five terms"
+    match [1;2;3;4] with
+    | first::second::someList::someList2::someList3::someList4 ->
+        printfn "Multiple matching possible with six terms %A %A %A %A %A %A" first second someList someList2 someList3 someList4
+    | _ ->
+        printfn "Multiple matching not possible with six terms"
+    match [1;2;3;4] with
+    | first::second::someList::someList2::[] ->
+        printfn "Multiple matching possible with five terms with empty list matching at last %A %A %A %A" first second someList someList2
+    | _ ->
+        printfn "Multiple matching not possible with five terms with empty list matching at last"
+    match [1;2;3;4] with
+    | first::second::someList::someList2::someList3::[] ->
+        printfn "Multiple matching possible with six terms with empty list matching at last %A %A %A %A %A" first second someList someList2 someList3
+    | _ ->
+        printfn "Multiple matching not possible with six terms with empty list matching at last"
 
 
 
@@ -524,7 +697,8 @@ let rec EvaluateExpression (exp: Expression option) =
 
 let parseAndEvaluateExpression (expressionString) (variablesDict:IDictionary<string,string>) =
     variables <- variablesDict
-    let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
+    //let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
+    let parsedExpression = tryParseMathExpressionByAppr2 expressionString [] [] (0) [] None
     parsedExpression
     |> fun(expResult, remainingString, _, variablesRef) ->
         match expResult with
