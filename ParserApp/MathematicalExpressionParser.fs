@@ -534,17 +534,6 @@ let parseAndEvaluateExpression (expressionString) (variablesDict:IDictionary<str
             (EvaluationFailure (ParsingError failure) , remainingString, Seq.ofList variablesRef)
 
 let examplesForMathematicalExpressionParser =
-    let exp1 = "23"
-    let exp2 = "23 + 42"
-    let exp3 = "(23 + 42)"
-    let exp4 = "(23 + (22 + 43))"
-    let exp5 = "(23 + 22) + 53"
-    let exp6 = "((23 + 22) + 53)"
-    let exp7 = "(23 + 24) + (25 + 26)"
-    let exp8 = "21 + 22 + 23 + 24 + 25 + 26"
-    let exp9 = "1 + 2 * 3 + 5 + 6 * 8"
-    let exp10 = "1 - 2 * 3"
-    let exp11 = "1*(-3)"
 
     let successTestCases = 
         Map.empty
@@ -611,21 +600,13 @@ let examplesForMathematicalExpressionParser =
     let variableTestCases =
         ["variableA + variableB"; "variableC + variableA"]
 
-    let resultForParseAToken = ((many1 (parseAToken())) |> run) exp6
-    let parsedExpression2 exp = tryParseMathExpression exp (None) (None) (None) (false) []
+    let developerDeliberatedNotHandledCases =
+        ["2 + 2(4)"; "(1 + 2)(1 + 4)"; "asin 0"; "2*-2"]
 
     //let listOfExpressions = [exp1;exp2;exp3;exp4;exp5;exp6;exp7;exp8;exp9;exp10;exp11]
     //let listOfExpressions = ["(1 + 2 + 3 * 3 * (1 + 2))"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
     //let listOfExpressions = [" 5 + + 6"]
-
-    let printResult exp = printfn "Original Expression :\n%A\nParsed Expression :\n%A\nEvaluated Result :\n%A\n" exp (parsedExpression2 exp) ((parsedExpression2 exp)|> 
-        (fun (expResult, remainingString, someBool, variablesRef) -> 
-            match expResult with
-            | ExpressionParsingSuccess parsedExp ->
-                (EvaluateExpression parsedExp)
-            | ExpressionParsingFailure failure ->
-                (EvaluationFailure (ParsingError failure)) ))
             
     listPatternMatching |> ignore
     //listOfExpressions |> List.iter printResult
@@ -703,7 +684,9 @@ let examplesForMathematicalExpressionParser =
     printfn "Failure test cases error messages check :"
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter printResult
 
-    printfn "Variables test cases : "
+    printfn "\n\nVariables test cases : "
     variableTestCases |> List.iter printResult
 
+    printfn "\n\nDeveloper deliberately didn't handle this, cases :"
+    developerDeliberatedNotHandledCases |> List.iter printResult
     
