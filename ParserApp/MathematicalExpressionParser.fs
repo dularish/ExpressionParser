@@ -18,6 +18,8 @@ type BinaryOperator =
     | Minus
     | Divide
     | Multiply
+    | Pow
+    | Modulo
 
 type UnaryOperator = 
     | Exp
@@ -79,7 +81,7 @@ let parseDouble =
             String(List.toArray(wholeNums)) |> double |> doubleToUnion)
 
 let arithmeticOps = 
-        ['+';'-';'/';'*']
+        ['+';'-';'/';'*';'^';'%']
 
 let unaryOps =
     ["exp";"sin";"cos";"tan";"acos";"asin";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"log";"ln";"floor";"ceil";"sqrt";"abs"]
@@ -88,6 +90,8 @@ let arithmeticCharToUnion input =
     if input = '+' then (BinaryOperator (Plus))
     elif input = '-' then (BinaryOperator (Minus))
     elif input = '*' then (BinaryOperator (Multiply))
+    elif input = '^' then (BinaryOperator (Pow))
+    elif input = '%' then (BinaryOperator (Modulo))
     else (BinaryOperator (Divide))
 
 let unaryStrToUnion input =
@@ -183,7 +187,20 @@ let getPriority operator =
     elif (operator = (BinaryOperator.Minus)) then 1
     elif (operator = (BinaryOperator.Multiply)) then 2
     elif (operator = (BinaryOperator.Divide)) then 2
+    elif (operator = (BinaryOperator.Modulo)) then 2
+    elif (operator = (BinaryOperator.Pow)) then 3
     else 0
+
+type Associativity =
+    | Left
+    | Right
+
+let getAssociativity operator =
+    match operator with
+    | Pow ->
+        Right   //Because DotNet evaluates this way, so conforming to DotNet
+    | _ ->
+        Left
 
 type MathExpressionParsingFailureType =
     | InsufficientParanthesis of string
@@ -566,7 +583,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
             | [] ->
                 tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
             | stackTopOp :: restOps ->
-                if getPriority(opMatched) > getPriority(stackTopOp) then
+                if ((getPriority(opMatched) > getPriority(stackTopOp)) || (((opMatched = stackTopOp) && ((getAssociativity opMatched) = Right )))) then
                     tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
                 else
                     match stackExp with
@@ -654,6 +671,10 @@ let computeBinaryExpression operand1 operator operand2 =
         EvaluationSuccess (operand1 - operand2)
     | Multiply ->
         EvaluationSuccess (operand1 * operand2)
+    | Pow ->
+        EvaluationSuccess (operand1 ** operand2)
+    | Modulo ->
+        EvaluationSuccess (operand1 % operand2)
     | Divide ->
         if operand2 = 0. then
             EvaluationFailure (DivideByZeroAttempted ("Expression tried to evaluate : " + operand1.ToString() + operator.ToString() + operand2.ToString()))
