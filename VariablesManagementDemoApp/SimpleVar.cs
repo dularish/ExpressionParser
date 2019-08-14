@@ -108,8 +108,8 @@ namespace VariablesManagementDemoApp
 
         private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
-            Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.Where(s => s != this).ToDictionary(s => s.Name, s => s.StrValue);
-            var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation);
+            Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.ToDictionary(s => s.Name, s => s.StrValue);
+            var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
 
             List<SimpleVar> dependencyVariablesLocal = new List<SimpleVar>();
 
@@ -120,14 +120,6 @@ namespace VariablesManagementDemoApp
                 if (variableMatched == null)
                 {
                     throw new Exception("Unexpected error! Variable " + variableName + " not found");
-                }
-                else if (variableMatched.DependsOn(this))
-                {
-                    dependencyVariables = new List<SimpleVar>();
-                    evaluatedResult = string.Empty;
-                    evaluationFailureMessage = "Circular dependency between " + this.Name + " and " + variableMatched.Name;
-
-                    return false;
                 }
                 else
                 {
