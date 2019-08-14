@@ -498,6 +498,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     match result with
     | Success (Token.Bracket BracketClose, remaining) ->
         //When it's a bracket close expression, we return the expression parsed till this bracket and let the caller handle the rest of the expression after this bracket close
+            //The caller as per current implementation could only be the helper function
         if openedBracketsCount = 1 then
             let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
             match parsedResult with
@@ -554,7 +555,8 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                         let expressionToPass = BinaryExpression ( Expression.Constant (-1.0), BinaryOperator.Multiply, someResultToOtherEnd) 
                         tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression))
                     | None ->
-                        (ExpressionParsingFailure (EmptyExpression remaining), input, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
+                        //Control to this point not expected, if it reaches this point, developer has to be know
+                        (ExpressionParsingFailure (EmptyExpression remaining), input, openedBracketsCount, totalVariablesRef)
                 | ExpressionParsingFailure failure ->
                     (ExpressionParsingFailure failure, remaining, openedBracketsCount, totalVariablesRef)
             | _ ->
@@ -572,6 +574,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                         let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
                         tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
                     | _ ->
+                        //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (NotEnoughOperands remaining), input, openedBracketsCount, refVariables)
         | Some (StableToken.Operator) ->
             (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, openedBracketsCount, refVariables)
@@ -589,12 +592,14 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                         let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
                         tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
                     | _ ->
+                        //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (NotEnoughOperands input), input, openedBracketsCount, refVariables)
                 | [] ->
                     match stackExp with
                     | onlyStackExp :: [] ->
                         (ExpressionParsingSuccess (Some onlyStackExp),input, openedBracketsCount, refVariables)
                     | _ ->
+                        //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (TooManyOperands input), input, openedBracketsCount, refVariables)
             | _ ->
                 (ExpressionParsingFailure (UnrecognizedInput input), input, openedBracketsCount, refVariables)
