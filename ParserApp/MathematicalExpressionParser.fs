@@ -457,9 +457,9 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     | Some expression ->
                         (ExpressionParsingSuccess (expOpt), remainingAfterVariable, 0, [variableName])
                     | None ->
-                        (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Variable %s does not have an expression" variableName)), expressionString, openedBracketsCount, [])
+                        (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Variable %s does not have an expression" variableName)), expressionString, openedBracketsCount, [variableName])
                 | ExpressionParsingFailure failure ->
-                    (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), expressionString, openedBracketsCount, [])
+                    (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), expressionString, openedBracketsCount, [variableName])
             else
                 (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Variable %s existed during parsing doesn't exists during evaluation" variableName)), expressionString, openedBracketsCount, refVariables)
         | Success (Token.MasterKeywordVariable masterKeywordVariable, remainingAfterMasterVariable) ->
