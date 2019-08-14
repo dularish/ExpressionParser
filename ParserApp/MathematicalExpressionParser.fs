@@ -211,6 +211,7 @@ type MathExpressionParserResult =
     | ExpressionParsingFailure of MathExpressionParsingFailureType
 
 //This implementation is a Mathematical expression parser which parses by applying BODMAS
+//This implementation was developed without considering Shunting yard algorithm, in my opinion lacks readability
 let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: BinaryOperator option) (memoryOp: BinaryOperator option) (isOpened:bool) (refVariables:string list)=
     
     //Resuable function to handle the expression that is found, handling for different conditions of stackExp, stackOp, remaining expression
@@ -424,9 +425,11 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
             | _ ->
                 (ExpressionParsingFailure (UnrecognizedInput input), input, isOpened, refVariables)
 
-//This implementation is a Mathematical expression parser which parses by applying BODMAS
+//This implementation is a Mathematical expression parser based on Shunting Yard algorithm
 let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp: BinaryOperator list) (openedBracketsCount:int) (refVariables:string list) (lastToken:StableToken option)=
     
+    //This helper function can be used to get the next expression term, the next expression term could be a double number,
+        //a variable, a bracketed expression or an unary expression
     let rec getTheNextTermAsExpression = fun(expressionString:string) ->
         let nextToken = run (parseAToken()) expressionString
         match nextToken with
@@ -494,7 +497,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     let result = run (parseAToken()) input
     match result with
     | Success (Token.Bracket BracketClose, remaining) ->
-        //Validate whether stackOp is None - Pending
+        //When it's a bracket close expression, we return the expression parsed till this bracket and let the caller handle the rest of the expression after this bracket close
         if openedBracketsCount = 1 then
             let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
             match parsedResult with
@@ -502,7 +505,6 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                 match parsedExpression with
                 | Some someParsedExpression ->
                     (ExpressionParsingSuccess (Some someParsedExpression), remaining, 0, refVariables)
-                    //tryParseMathExpressionByAppr2 remaining [someParsedExpression] [] 0 refVariables (Some (StableToken.Expression))
                 | _ ->
                     (ExpressionParsingFailure (EmptyExpression input), input, numberOfOpenedBrackets, refVariables)
             | _ ->
@@ -514,22 +516,35 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     | Success (Token.MasterKeywordVariable _, _)
     | Success (Token.Variable _, _)
     | Success (Token.UnaryOperator _, _) ->
-        let (resultToEndOfBracket, finalRemaining, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(input)
-        let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
-        match resultToEndOfBracket with
-        | ExpressionParsingSuccess parsedResult ->
-            match parsedResult with
-            | Some someResultToOtherEnd ->
-                tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression))
-            | None ->
-                (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
-        | ExpressionParsingFailure failure ->
-            (ExpressionParsingFailure failure, input, openedBracketsCount, totalVariablesRef)
+        //All these matched types mean, that the next term can be converted to an expression with the help of the helper function that we have built
+            //But the lastToken matched before must be either None or an operator, which means the current implementation doesn't support "(1+3)(2+4)" or "2(4)"
+        match lastToken with
+        | None
+        | Some (StableToken.Operator) ->
+            let (resultToEndOfBracket, finalRemaining, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(input)
+            let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
+            match resultToEndOfBracket with
+            | ExpressionParsingSuccess parsedResult ->
+                match parsedResult with
+                | Some someResultToOtherEnd ->
+                    tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression))
+                | None ->
+                    (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
+            | ExpressionParsingFailure failure ->
+                (ExpressionParsingFailure failure, input, openedBracketsCount, totalVariablesRef)
+        | Some (StableToken.Expression) ->
+            (ExpressionParsingFailure (MissingOperator input), input, openedBracketsCount, refVariables)
     | Success (Token.BinaryOperator opMatched, remaining) ->
+        //When an operator is matched,
+            //if the matched operator's priority is greater that the top of the operatorstack,  it will be pushed to operator stack
+                //otherwise top stack expressions would be evaluated with top stack operators till it is so
+            //Last token that was matched before must be an expression, because sequencing of operators is not allowed
         match lastToken with
         | None ->
             match opMatched with
             | Minus ->
+                //This block is because Minus coming at the start of the expression would negate the expression followed by it
+                    //But the current implementation does not allow the use of Minus symbol in the middle of the expression like "2 ^ -2", the workaround is "2 ^ (-2)"
                 let (exprTermResult, remainingAfterExpressionTerm, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(remaining)
                 let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
                 match exprTermResult with
@@ -561,6 +576,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         | Some (StableToken.Operator) ->
             (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, openedBracketsCount, refVariables)
     | Failure (_) ->
+        //Failure can also possibly mean that the string is run out of characters to parse but the stacks of operators and expressions need to be resolved
         if openedBracketsCount > 0 then
             (ExpressionParsingFailure (InsufficientParanthesis input), input, openedBracketsCount, refVariables)//Possibly throw an error here
         else
