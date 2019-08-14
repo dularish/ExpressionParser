@@ -222,6 +222,7 @@ type MathExpressionParsingFailureType =
     | InvalidNumberOfExpressionsInStack of string
     | NotEnoughOperands of string
     | TooManyOperands of string
+    | CircularReferencingFound of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option
@@ -229,7 +230,7 @@ type MathExpressionParserResult =
 
 
 //This implementation is a Mathematical expression parser based on Shunting Yard algorithm
-let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp: BinaryOperator list) (openedBracketsCount:int) (refVariables:string list) (lastToken:StableToken option)=
+let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp: BinaryOperator list) (openedBracketsCount:int) (refVariables:string list) (lastToken:StableToken option) (variablesComputationPath:string list)=
     
     //This helper function can be used to get the next expression term, the next expression term could be a double number,
         //a variable, a bracketed expression or an unary expression
@@ -237,7 +238,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         let nextToken = run (parseAToken()) expressionString
         match nextToken with
         | Success (Token.Bracket BracketOpen, remainingAfterBracketOpen) ->
-            let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (1) [] None
+            let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (1) [] None variablesComputationPath
             if numberOfBracketsOpenedInResult > 0 then
                 (ExpressionParsingFailure (InsufficientParanthesis expressionString), expressionString, numberOfBracketsOpenedInResult , resultVariablesRef)
             elif numberOfBracketsOpenedInResult < 0 then
@@ -255,22 +256,29 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         | Success (Token.DoubleConstant doubleConstant, remainingAfterDoubleConstant) ->
             (ExpressionParsingSuccess (Some (Expression.Constant doubleConstant)), remainingAfterDoubleConstant, 0, [])
         | Success (Token.Variable variableName, remainingAfterVariable) ->
-            if variables.ContainsKey(variableName) then
-                let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 variables.[variableName] ([]) ([]) (openedBracketsCount) [] None
-                match parserResult with
-                | ExpressionParsingSuccess expOpt ->
-                    match expOpt with
-                    | Some expression ->
-                        (ExpressionParsingSuccess (expOpt), remainingAfterVariable, 0, [variableName])
-                    | None ->
-                        (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Variable %s does not have an expression" variableName)), expressionString, openedBracketsCount, [variableName])
-                | ExpressionParsingFailure failure ->
-                    (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), expressionString, openedBracketsCount, [variableName])
+            if (variablesComputationPath |> List.contains variableName) then
+                (ExpressionParsingFailure (CircularReferencingFound (sprintf "Circular referencing found in the evaluation as %A" (variableName :: variablesComputationPath))), expressionString, openedBracketsCount, [])
             else
-                (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Variable %s existed during parsing doesn't exists during evaluation" variableName)), expressionString, openedBracketsCount, refVariables)
+                if variables.ContainsKey(variableName) then
+                    let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 variables.[variableName] ([]) ([]) (openedBracketsCount) [] None (variableName :: variablesComputationPath)
+                    match parserResult with
+                    | ExpressionParsingSuccess expOpt ->
+                        match expOpt with
+                        | Some expression ->
+                            (ExpressionParsingSuccess (expOpt), remainingAfterVariable, 0, [variableName])
+                        | None ->
+                            (ExpressionParsingFailure (EmptyVariableExpression (sprintf "Variable %s does not have an expression" variableName)), expressionString, openedBracketsCount, [variableName])
+                    | ExpressionParsingFailure failure ->
+                        match failure with
+                        | CircularReferencingFound failureMessage ->
+                            (ExpressionParsingFailure failure, expressionString, openedBracketsCount, [])
+                        | _ ->
+                            (ExpressionParsingFailure (VariableParsingFailed (sprintf "Unable to parse the expression related to the variable %s" variableName)), expressionString, openedBracketsCount, [variableName])
+                else
+                    (ExpressionParsingFailure (VariableDoesNotExists (sprintf "Variable %s existed during parsing doesn't exists during evaluation" variableName)), expressionString, openedBracketsCount, refVariables)
         | Success (Token.MasterKeywordVariable masterKeywordVariable, remainingAfterMasterVariable) ->
             if masterVariables.ContainsKey(masterKeywordVariable) then
-                let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 masterVariables.[masterKeywordVariable] ([]) ([]) (0) [] None
+                let parserResult, remainingString, _, _ = tryParseMathExpressionByAppr2 masterVariables.[masterKeywordVariable] ([]) ([]) (0) [] None variablesComputationPath
                 match parserResult with
                 | ExpressionParsingSuccess expOpt ->
                     match expOpt with
@@ -303,7 +311,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         //When it's a bracket close expression, we return the expression parsed till this bracket and let the caller handle the rest of the expression after this bracket close
             //The caller as per current implementation could only be the helper function
         if openedBracketsCount = 1 then
-            let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
+            let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression)) variablesComputationPath
             match parsedResult with
             | ExpressionParsingSuccess parsedExpression ->
                 match parsedExpression with
@@ -331,7 +339,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
             | ExpressionParsingSuccess parsedResult ->
                 match parsedResult with
                 | Some someResultToOtherEnd ->
-                    tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression))
+                    tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression)) variablesComputationPath
                 | None ->
                     (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
             | ExpressionParsingFailure failure ->
@@ -356,7 +364,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     match parsedResult with
                     | Some someResultToOtherEnd ->
                         let expressionToPass = BinaryExpression ( Expression.Constant (-1.0), BinaryOperator.Multiply, someResultToOtherEnd) 
-                        tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression))
+                        tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression)) variablesComputationPath
                     | None ->
                         //Control to this point not expected, if it reaches this point, developer has to be know
                         (ExpressionParsingFailure (EmptyExpression remaining), input, openedBracketsCount, totalVariablesRef)
@@ -367,15 +375,15 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         | Some (StableToken.Expression) ->
             match stackOp with
             | [] ->
-                tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
+                tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator)) variablesComputationPath
             | stackTopOp :: restOps ->
                 if ((getPriority(opMatched) > getPriority(stackTopOp)) || (((opMatched = stackTopOp) && ((getAssociativity opMatched) = Right )))) then
-                    tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator))
+                    tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator)) variablesComputationPath
                 else
                     match stackExp with
                     | topMostExp :: secondTopExp :: restExps ->
                         let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
-                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
+                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken variablesComputationPath
                     | _ ->
                         //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (NotEnoughOperands remaining), input, openedBracketsCount, refVariables)
@@ -393,7 +401,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     match stackExp with
                     | topMostExp :: secondTopExp :: restExps ->
                         let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
-                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken
+                        tryParseMathExpressionByAppr2 input (newExprToPush :: restExps) (restOps) (openedBracketsCount) refVariables lastToken variablesComputationPath
                     | _ ->
                         //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (NotEnoughOperands input), input, openedBracketsCount, refVariables)
@@ -504,10 +512,10 @@ let rec EvaluateExpression (exp: Expression option) =
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")
 
-let parseAndEvaluateExpression (expressionString) (variablesDict:IDictionary<string,string>) =
+let parseAndEvaluateExpression (expressionString) (variablesDict:IDictionary<string,string>) (variableNameBeingEvaluated:string) =
     variables <- variablesDict
     //let parsedExpression = tryParseMathExpression expressionString (None) (None) (None) (false) []
-    let parsedExpression = tryParseMathExpressionByAppr2 expressionString [] [] (0) [] None
+    let parsedExpression = tryParseMathExpressionByAppr2 expressionString [] [] (0) [] None [variableNameBeingEvaluated]
     parsedExpression
     |> fun(expResult, remainingString, _, variablesRef) ->
         match expResult with
@@ -603,7 +611,7 @@ let examplesForMathematicalExpressionParser =
     let mutable countOfFailed = 0
     let mutable countOfSuccess = 0
     let printFailureCase (key:string) (expectedValue: double) =
-        let evaluatedResult = parseAndEvaluateExpression key variables
+        let evaluatedResult = parseAndEvaluateExpression key variables "someUniqueName"
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
@@ -624,7 +632,7 @@ let examplesForMathematicalExpressionParser =
                 countOfFailed <- countOfFailed + 1
 
     let printAllCases (key:string) (expectedValue: double) =
-        let evaluatedResult = parseAndEvaluateExpression key variables
+        let evaluatedResult = parseAndEvaluateExpression key variables "someUniqueName"
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
@@ -649,7 +657,7 @@ let examplesForMathematicalExpressionParser =
                     
 
     let printResult (key:string) =
-        let evaluatedResult = parseAndEvaluateExpression key variables
+        let evaluatedResult = parseAndEvaluateExpression key variables "someUniqueName"
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
