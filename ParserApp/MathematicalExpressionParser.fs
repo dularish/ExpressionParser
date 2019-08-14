@@ -431,9 +431,11 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         let nextToken = run (parseAToken()) expressionString
         match nextToken with
         | Success (Token.Bracket BracketOpen, remainingAfterBracketOpen) ->
-            let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (openedBracketsCount + 1) [] None
+            let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (1) [] None
             if numberOfBracketsOpenedInResult > 0 then
                 (ExpressionParsingFailure (InsufficientParanthesis expressionString), expressionString, numberOfBracketsOpenedInResult , resultVariablesRef)
+            elif numberOfBracketsOpenedInResult < 0 then
+                (ExpressionParsingFailure (TooManyParanthesis expressionString), expressionString, numberOfBracketsOpenedInResult, resultVariablesRef)
             else
                 match resultToEndOfBracket with
                 | ExpressionParsingSuccess parsedResult ->
@@ -493,8 +495,18 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     match result with
     | Success (Token.Bracket BracketClose, remaining) ->
         //Validate whether stackOp is None - Pending
-        if openedBracketsCount > 0 then
-            tryParseMathExpressionByAppr2 remaining stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
+        if openedBracketsCount = 1 then
+            let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression))
+            match parsedResult with
+            | ExpressionParsingSuccess parsedExpression ->
+                match parsedExpression with
+                | Some someParsedExpression ->
+                    (ExpressionParsingSuccess (Some someParsedExpression), remaining, 0, refVariables)
+                    //tryParseMathExpressionByAppr2 remaining [someParsedExpression] [] 0 refVariables (Some (StableToken.Expression))
+                | _ ->
+                    (ExpressionParsingFailure (EmptyExpression input), input, numberOfOpenedBrackets, refVariables)
+            | _ ->
+                (parsedResult, input, numberOfOpenedBrackets, refVariables)
         else
             (ExpressionParsingFailure (TooManyParanthesis input) , input, openedBracketsCount, refVariables)//Not changing the state of isOpened as it's no more possible to close
     | Success (Token.Bracket _, _)//This would definitely have to be OpenBracket
@@ -509,7 +521,6 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
             match parsedResult with
             | Some someResultToOtherEnd ->
                 tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression))
-                //handleFoundExpression(someResultToOtherEnd, finalRemaining, totalVariablesRef)
             | None ->
                 (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
         | ExpressionParsingFailure failure ->

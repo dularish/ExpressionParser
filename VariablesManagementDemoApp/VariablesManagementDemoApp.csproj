@@ -102,7 +102,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ParserApp\ParserApp.fsproj">
-      <Project>{cd99e04c-ec70-4ba1-82f7-3791ec24fb45}</Project>
+      <Project>{68bde752-67cd-4c83-9204-ace044280ef5}</Project>
       <Name>ParserApp</Name>
     </ProjectReference>
   </ItemGroup>
