@@ -407,36 +407,6 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
             | _ ->
                 (ExpressionParsingFailure (UnrecognizedInput input), input, openedBracketsCount, refVariables)
 
- 
-let listPatternMatching =
-    match [1;2;3;4] with
-    | first::second::someList::someList2 ->
-        printfn "Multiple matching possible with four terms %A %A %A %A" first second someList someList2
-    | _ ->
-        printfn "Multiple matching not possible with four terms"
-    match [1;2;3;4] with
-    | first::second::someList::someList2::someList3 ->
-        printfn "Multiple matching possible with five terms %A %A %A %A %A" first second someList someList2 someList3
-    | _ ->
-        printfn "Multiple matching not possible with five terms"
-    match [1;2;3;4] with
-    | first::second::someList::someList2::someList3::someList4 ->
-        printfn "Multiple matching possible with six terms %A %A %A %A %A %A" first second someList someList2 someList3 someList4
-    | _ ->
-        printfn "Multiple matching not possible with six terms"
-    match [1;2;3;4] with
-    | first::second::someList::someList2::[] ->
-        printfn "Multiple matching possible with five terms with empty list matching at last %A %A %A %A" first second someList someList2
-    | _ ->
-        printfn "Multiple matching not possible with five terms with empty list matching at last"
-    match [1;2;3;4] with
-    | first::second::someList::someList2::someList3::[] ->
-        printfn "Multiple matching possible with six terms with empty list matching at last %A %A %A %A %A" first second someList someList2 someList3
-    | _ ->
-        printfn "Multiple matching not possible with six terms with empty list matching at last"
-
-
-
 type ExpressionEvaluationError =
     | UnexpectedToken of string
     | InvalidOperatorUse of string
@@ -628,8 +598,7 @@ let examplesForMathematicalExpressionParser =
     //let listOfExpressions = ["(1 + 2 + 3 * 3 * (1 + 2))"]
     //let listOfExpressions = ["21 + 22 + 23 + 24 + 25 + 26"]
     //let listOfExpressions = [" 5 + + 6"]
-            
-    listPatternMatching |> ignore
+
     //listOfExpressions |> List.iter printResult
     let mutable countOfFailed = 0
     let mutable countOfSuccess = 0

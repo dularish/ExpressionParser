@@ -217,3 +217,33 @@ let rec tryParseMathExpression input (stackExp:Expression option) (stackOp: Bina
                     (ExpressionParsingFailure (EmptyParanthesis input), input, isOpened, refVariables)
             | _ ->
                 (ExpressionParsingFailure (UnrecognizedInput input), input, isOpened, refVariables)
+
+
+
+//Added for just debugging purposes
+let listPatternMatching =
+   match [1;2;3;4] with
+   | first::second::someList::someList2 ->
+       printfn "Multiple matching possible with four terms %A %A %A %A" first second someList someList2
+   | _ ->
+       printfn "Multiple matching not possible with four terms"
+   match [1;2;3;4] with
+   | first::second::someList::someList2::someList3 ->
+       printfn "Multiple matching possible with five terms %A %A %A %A %A" first second someList someList2 someList3
+   | _ ->
+       printfn "Multiple matching not possible with five terms"
+   match [1;2;3;4] with
+   | first::second::someList::someList2::someList3::someList4 ->
+       printfn "Multiple matching possible with six terms %A %A %A %A %A %A" first second someList someList2 someList3 someList4
+   | _ ->
+       printfn "Multiple matching not possible with six terms"
+   match [1;2;3;4] with
+   | first::second::someList::someList2::[] ->
+       printfn "Multiple matching possible with five terms with empty list matching at last %A %A %A %A" first second someList someList2
+   | _ ->
+       printfn "Multiple matching not possible with five terms with empty list matching at last"
+   match [1;2;3;4] with
+   | first::second::someList::someList2::someList3::[] ->
+       printfn "Multiple matching possible with six terms with empty list matching at last %A %A %A %A %A" first second someList someList2 someList3
+   | _ ->
+       printfn "Multiple matching not possible with six terms with empty list matching at last"
