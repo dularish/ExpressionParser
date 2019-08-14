@@ -20,6 +20,11 @@ namespace VariablesManagementDemoApp
 
         private List<SimpleVar> _dependencyVariables = new List<SimpleVar>();
 
+        public bool DependsOn(SimpleVar variableToCheckDependency)
+        {
+            return (variableToCheckDependency != null) && _dependencyVariables.Contains(variableToCheckDependency);
+        }
+
         public string StrValue
         {
             get
@@ -115,6 +120,14 @@ namespace VariablesManagementDemoApp
                 if (variableMatched == null)
                 {
                     throw new Exception("Unexpected error! Variable " + variableName + " not found");
+                }
+                else if (variableMatched.DependsOn(this))
+                {
+                    dependencyVariables = new List<SimpleVar>();
+                    evaluatedResult = string.Empty;
+                    evaluationFailureMessage = "Circular dependency between " + this.Name + " and " + variableMatched.Name;
+
+                    return false;
                 }
                 else
                 {
