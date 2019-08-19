@@ -174,6 +174,18 @@ let parseAToken = fun() ->
 let parseTwoTokens =
     (parseAToken() .>>. parseAToken())
 
+let parseQuotedStringInnerValuesChoices =
+    let alphabets =
+        ['a'..'z'] @ ['A'..'Z']
+        |> List.map (fun a -> a.ToString())
+    alphabets @ ["\\\""]
+    |> List.map (fun s -> pString s)
+    |> choice
+
+let parseQuotedString = 
+    ((pChar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pChar '"'))
+    |>> List.reduce (+)
+
 type EntryType = 
     | Token of Token
     | TokenList of EntryType list
@@ -880,3 +892,5 @@ let examplesForMathematicalExpressionParser =
     printfn "\n\nDeveloper deliberately didn't handle this, cases :"
     developerDeliberatedNotHandledCases |> List.iter printResult
     
+    ["\"abc\"";"\"ab\\\"c\"";"\"abc,d";"\"abc\\\"\"\""]
+    |> List.iter (fun a -> printfn "%A" (run (parseQuotedString) a))
