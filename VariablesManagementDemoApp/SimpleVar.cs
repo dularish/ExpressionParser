@@ -20,6 +20,11 @@ namespace VariablesManagementDemoApp
 
         private List<SimpleVar> _dependencyVariables = new List<SimpleVar>();
 
+        public bool DependsOn(SimpleVar variableToCheckDependency)
+        {
+            return (variableToCheckDependency != null) && _dependencyVariables.Contains(variableToCheckDependency);
+        }
+
         public string StrValue
         {
             get
@@ -32,26 +37,34 @@ namespace VariablesManagementDemoApp
                 _strValue = value;
                 onPropertyChanged();
 
-                bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
+                updateEvaluation(value, true);
+            }
+        }
 
+        private void updateEvaluation(string value, bool isDependenciesToBeUpdated)
+        {
+            bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
+
+            if (isDependenciesToBeUpdated)
+            {
                 clearDependencyVariables();
                 addDependencyVariables(dependencyVariables);
-
-                if (isEvaluationSuccess)
-                {
-                    EvaluatedValue = evaluatedResult;
-                    EvaluationFailureMessage = string.Empty;
-                    IsErrorHighlighted = false;
-                }
-                else
-                {
-                    EvaluatedValue = string.Empty;
-                    EvaluationFailureMessage = evaluationFailureMessage;
-                    IsErrorHighlighted = true;
-                }
-                LastUpdatedDateTime = DateTime.Now;
-                ValueUpdated?.Invoke(this, EventArgs.Empty);
             }
+
+            if (isEvaluationSuccess)
+            {
+                EvaluatedValue = evaluatedResult;
+                EvaluationFailureMessage = string.Empty;
+                IsErrorHighlighted = false;
+            }
+            else
+            {
+                EvaluatedValue = string.Empty;
+                EvaluationFailureMessage = evaluationFailureMessage;
+                IsErrorHighlighted = true;
+            }
+            LastUpdatedDateTime = DateTime.Now;
+            ValueUpdated?.Invoke(this, EventArgs.Empty);
         }
 
         private void addDependencyVariables(List<SimpleVar> dependencyVariables)
@@ -72,17 +85,17 @@ namespace VariablesManagementDemoApp
 
         private void Variable_ValueDestroyed(object sender, EventArgs e)
         {
-            StrValue = _strValue;
+            updateEvaluation(_strValue, true);
         }
 
         private void Variable_ValueUpdated(object sender, EventArgs e)
         {
-            StrValue = _strValue;
+            updateEvaluation(_strValue, false);
         }
 
         private void Variable_NameChanged(object sender, EventArgs e)
         {
-            StrValue = _strValue;
+            updateEvaluation(_strValue, true);
         }
 
         private void clearDependencyVariables()
@@ -103,8 +116,8 @@ namespace VariablesManagementDemoApp
 
         private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
-            Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.Where(s => s != this).ToDictionary(s => s.Name, s => s.StrValue);
-            var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation);
+            Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.ToDictionary(s => s.Name, s => s.StrValue);
+            var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
 
             List<SimpleVar> dependencyVariablesLocal = new List<SimpleVar>();
 
