@@ -200,13 +200,13 @@ type EntryType =
     | TokenList of EntryType list
 
 let getPriority operator =
-    if (operator = (BinaryOperator.Plus)) then 1
-    elif (operator = (BinaryOperator.Minus)) then 1
-    elif (operator = (BinaryOperator.Multiply)) then 2
-    elif (operator = (BinaryOperator.Divide)) then 2
-    elif (operator = (BinaryOperator.Modulo)) then 2
-    elif (operator = (BinaryOperator.Pow)) then 3
-    else 0
+    match operator with
+    | Plus -> 1
+    | Minus -> 1
+    | Multiply -> 2
+    | Divide -> 2
+    | Modulo -> 2
+    | Pow -> 3
 
 type Associativity =
     | Left
