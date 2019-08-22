@@ -139,7 +139,23 @@ namespace VariablesManagementDemoApp
 
             if (parsedOutput.Item1.IsEvaluationSuccess)
             {
-                string evaluatedResultString = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationSuccess).Item.ToString();
+                var evaluatedResultItem = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationSuccess).Item;
+
+                string evaluatedResultString = string.Empty;
+
+                if (evaluatedResultItem.IsDouble)
+                {
+                    evaluatedResultString = (evaluatedResultItem as MathematicalExpressionParser.AllowedEvaluationResultTypes.Double).Item.ToString();
+                }
+                else if (evaluatedResultItem.IsString)
+                {
+                    evaluatedResultString = (evaluatedResultItem as MathematicalExpressionParser.AllowedEvaluationResultTypes.String).Item;
+                }
+                else
+                {
+                    //This shouldn't be thrown at any cases as per current implementation
+                    throw new NotImplementedException();
+                }
 
                 evaluatedResult = evaluatedResultString;
                 evaluationFailureMessage = string.Empty;
