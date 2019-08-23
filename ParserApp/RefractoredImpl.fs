@@ -7,6 +7,7 @@ open System
 let OrElseSelectiveUnwrapping parser1 parser2 =
     let innerFn input =
         if (String.length input) = 0 then
+            //Added to prevent stackOverflow//But in the long term prevent control getting here
             Failure "No more inputs"
         else
             let result1 = run (parser1()) input
@@ -22,9 +23,9 @@ let OrElseSelectiveUnwrapping parser1 parser2 =
                     Failure err
     Parser innerFn        
 
-let (<*|*>) = OrElseSelectiveUnwrapping
+let (<^|^>) = OrElseSelectiveUnwrapping
 
-let parseSingleTerm =
+let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
         let wholeNumsWithNegSignIfNeeded =
@@ -40,12 +41,12 @@ let parseSingleTerm =
         | None ->
             String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant)
 
-let bracketedExpression expParser = fun() ->
+let parseBracketedExpression expParser = fun() ->
     (between parseOpenBracket (parseSpaces >>. expParser() .>> parseSpaces) parseCloseBracket)
 
 let parseTerm (expParser)=
-    (fun () -> parseSingleTerm)
-    <*|*> (bracketedExpression expParser)
+    (fun () -> parseNumericTerm)
+    <^|^> (parseBracketedExpression expParser)
 
 type ShuntingYardStreamCandidateTypes =
     | MaybeOperator of Token option
@@ -61,6 +62,7 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
                 let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
                 performShuntingYardLogicOnList (newExprToPush :: restExps) (restOps) []
             | _ ->
+                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                 Expression.Constant -1.
         | [] ->
             match expStack with
@@ -120,7 +122,7 @@ let parseContinuousTerms expParser= fun() ->
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression = fun() ->
-     (parseContinuousTerms parseExpression) <*|*> (bracketedExpression parseExpression)
+     (parseContinuousTerms parseExpression) <^|^> (parseBracketedExpression parseExpression)
 
 let getParsedOutput inputString =
     run (parseExpression()) inputString
