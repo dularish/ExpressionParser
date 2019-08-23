@@ -74,6 +74,7 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
         | MaybeOperator operator ->
             match operator with
             | None ->
+                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                 Expression.Constant -1.
             | Some ( BinaryOperator someOp) ->
                 match opStack with
@@ -91,6 +92,7 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
                             //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                             Expression.Constant -1.
             | _ ->
+                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                 Expression.Constant -1.
         | Expr someExp ->
             performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
@@ -101,7 +103,14 @@ let convertContinuousTermsToSingleExpression (firstExp,(operatorExpPairList:(Tok
         | [] -> []
         | _ ->
             operatorExpPairList
-            |> List.map (fun (x,y) -> [MaybeOperator x]@[Expr y])
+            |> List.map (fun (x,y) -> 
+                            match x with
+                            | Some operatorToken ->
+                                [MaybeOperator x]@[Expr y]
+                            | None ->
+                                //When there are two valid terms not separated by an operator, implicitly assumed to be of multiplication
+                                //Example cases : "2(4)", "(1+2)(2+3)"
+                                [MaybeOperator (Some (BinaryOperator Multiply))]@[Expr y])
             |> List.reduce (@)
     ((Expr firstExp) :: secondArgumentConvertedToSingleList)
     |> performShuntingYardLogicOnList [] []
@@ -197,6 +206,7 @@ let refractoredImplExamples = fun() ->
 
     let developerDeliberatedNotHandledCases =
         [
+        "2 2"
         "2 + 2(4)"; //Not supported by existing Simpla expression parser
         "(1 + 2)(1 + 4)"; //Not supported by existing Simpla expression parser
         "asin 0"; //Existing Simpla expression parser returns -Infinity
