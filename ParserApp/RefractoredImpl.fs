@@ -195,6 +195,14 @@ let refractoredImplExamples = fun() ->
             .Add("((2)) * ((3", ExpressionEvaluationError.UnBalancedParanthesis "")
             .Add("((9)) * ((1)", ExpressionEvaluationError.UnBalancedParanthesis "")
 
+    let developerDeliberatedNotHandledCases =
+        [
+        "2 + 2(4)"; //Not supported by existing Simpla expression parser
+        "(1 + 2)(1 + 4)"; //Not supported by existing Simpla expression parser
+        "asin 0"; //Existing Simpla expression parser returns -Infinity
+        "2*-2"//Existing simpla expression parser supports this//If this has to be supported, then the expression "2*--2" would also be supported
+        ]
+
     printfn "\n\n\nRefractoredImpl\n\n"
     let printParsedOutput inputString =
         printfn "Original Expression : %A" inputString
@@ -233,3 +241,5 @@ let refractoredImplExamples = fun() ->
     printfn "Number of success cases : %A " countOfSuccess
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter printParsedOutput
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+    printfn "Developer didn't handle it deliberately cases :"
+    developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
