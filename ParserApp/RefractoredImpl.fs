@@ -3,6 +3,27 @@ open MathematicalExpressionParser
 open ParserBuildingBlocks
 open System
 
+
+let OrElseSelectiveUnwrapping parser1 parser2 =
+    let innerFn input =
+        if (String.length input) = 0 then
+            Failure "No more inputs"
+        else
+            let result1 = run (parser1()) input
+            match result1 with
+            | Success (matched1, remaining) ->
+                Success (matched1, remaining)
+            | Failure err ->
+                let result2 = run (parser2()) input
+                match result2 with
+                | Success (matched2,remaining2) ->
+                    Success (matched2, remaining2)
+                | Failure err ->
+                    Failure err
+    Parser innerFn        
+
+let (<*|*>) = OrElseSelectiveUnwrapping
+
 let parseSingleTerm =
     (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
@@ -13,23 +34,72 @@ let parseSingleTerm =
         | None ->
             String(List.toArray(wholeNums)) |> double |> Expression.Constant)
 
-let parseTerm =
-    parseSingleTerm// <|> (between parseOpenBracket (parseSpaces >>. parseSingleTerm .>> parseSpaces) parseCloseBracket)
-    //<|> expParser
+let bracketedExpression expParser = fun() ->
+    (between parseOpenBracket (parseSpaces >>. expParser() .>> parseSpaces) parseCloseBracket)
 
-let convertContExpressionsToSingleExpression (firstExp,operatorExpPairList) =
+let parseTerm (expParser)=
+    (fun () -> parseSingleTerm)// <|> (between parseOpenBracket (parseSpaces >>. parseSingleTerm .>> parseSpaces) parseCloseBracket)
+    <*|*> (bracketedExpression expParser)
+
+type ShuntingYardStreamCandidateTypes =
+    | MaybeOperator of Token option
+    | Expr of Expression
+
+let rec performShuntingYardLogicOnList expStack opStack streamList =
+    match streamList with
+    | [] ->
+        match opStack with
+        | stackTopOp :: restOps ->
+            match expStack with
+            | topMostExp :: secondTopExp :: restExps ->
+                let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
+                performShuntingYardLogicOnList (newExprToPush :: restExps) (restOps) []
+            | _ ->
+                Expression.Constant -1.
+        | [] ->
+            match expStack with
+            | onlyStackExp :: [] ->
+                onlyStackExp
+            | _ ->
+                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
+                Expression.Constant -1.
+    | topMostOfStream :: restStream ->
+        match topMostOfStream with
+        | MaybeOperator operator ->
+            match operator with
+            | None ->
+                Expression.Constant -1.
+            | Some ( BinaryOperator someOp) ->
+                performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
+            | _ ->
+                Expression.Constant -1.
+        | Expr someExp ->
+            performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
+
+
+
+let convertContExpressionsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
     //Yet to write the logic
-    Expression.BinaryExpression (Expression.Constant 1., Plus, Expression.Constant 1.)
+    //Expression.BinaryExpression (Expression.Constant 1., Plus, Expression.Constant 1.)
+    let secondArgumentConvertedToSingleList =
+        match operatorExpPairList with
+        | [] -> []
+        | _ ->
+            operatorExpPairList
+            |> List.map (fun (x,y) -> [MaybeOperator x]@[Expr y])
+            |> List.reduce (@)
+    ((Expr firstExp) :: secondArgumentConvertedToSingleList)
+    |> performShuntingYardLogicOnList [] []
 
-let parseContinuousTerms =
-    parseSpaces >>. (parseTerm .>>. (many (opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces) .>>. parseTerm))) .>> parseSpaces
+let parseContinuousTerms expParser= fun() ->
+    parseSpaces >>. ((parseTerm expParser) .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser)))) .>> parseSpaces
     |>> convertContExpressionsToSingleExpression
 
-let parseExpression =
-    parseContinuousTerms <|> (between parseOpenBracket (parseSpaces >>. parseContinuousTerms .>> parseSpaces) parseCloseBracket)
+let rec parseExpression = fun() ->
+    (bracketedExpression parseExpression) <*|*> (parseContinuousTerms parseExpression)
 
 let getParsedOutput inputString =
-    run parseExpression inputString
+    run (parseExpression()) inputString
 
 let refractoredImplExamples = fun() ->
     let successTestCases = 
@@ -74,7 +144,7 @@ let refractoredImplExamples = fun() ->
             .Add("10/4", 2.5)
             .Add("5/3", 1.66)
             .Add("3 + 8/5 -1 -2*5", -6.4)
-            .Add(" -5 + 2", -3.)
+            //.Add(" -5 + 2", -3.)
             .Add("(2)", 2.)
             .Add("(5 + 2*3 - 1 + 7 * 8)", 66.)
             .Add("(67 + 2 * 3 - 67 + 2/1 - 7)", 1.)
