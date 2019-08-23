@@ -235,6 +235,7 @@ type MathExpressionParsingFailureType =
     | NotEnoughOperands of string
     | TooManyOperands of string
     | CircularReferencingFound of string
+    | IncompleteParsing of string
 
 type MathExpressionParserResult =
     | ExpressionParsingSuccess of Expression option

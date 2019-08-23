@@ -120,7 +120,11 @@ let parseAndEvaluateExpressionExpressively (expressionString) =
    let parsedExpression = getParsedOutput expressionString
    match parsedExpression with
    | Success (exp, remainingString) ->
-        ((EvaluateExpression (Some exp)), remainingString, Seq.ofList [])
+        match remainingString.Trim().Length with
+        | 0 ->
+            ((EvaluateExpression (Some exp)), remainingString, Seq.ofList [])
+        | _ ->
+            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing (sprintf "Could not parse the remaining string : %A" remainingString))) , "", Seq.ofList [])
    | Failure failure ->
         (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput "")) , "", Seq.ofList [])
            
@@ -175,6 +179,22 @@ let refractoredImplExamples = fun() ->
             .Add("(2) + (17*2-30) * (5)+2 - (8/2)*4", 8.)
             .Add("(((((5)))))", 5.)
             .Add("(( ((2)) + 4))*((5))", 30.)
+
+    let errorCases = 
+        Map.empty
+            .Add("(6 + c)", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.UnrecognizedInput "c should not be recognized"))
+            .Add("  6 + c", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.UnrecognizedInput "c should not be recognized"))
+            .Add("  7 & 2", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.UnrecognizedInput "& should not be recognized"))
+            .Add("  %", ExpressionEvaluationError.UnexpectedToken "")
+            .Add(" 5 + + 6", ExpressionEvaluationError.InvalidOperatorUse "")
+            .Add("5/0", ExpressionEvaluationError.DivideByZeroAttempted "")
+            .Add(" 2 - 1 + 14/0 + 7", ExpressionEvaluationError.DivideByZeroAttempted "")
+            .Add("(5*7/5) + (23) - 5 * (98-4)/(6*7-42)", ExpressionEvaluationError.DivideByZeroAttempted "")
+            .Add("2 + (5 * 2", ExpressionEvaluationError.UnBalancedParanthesis "")
+            .Add("(((((4))))", ExpressionEvaluationError.UnBalancedParanthesis "")
+            .Add("((2)) * ((3", ExpressionEvaluationError.UnBalancedParanthesis "")
+            .Add("((9)) * ((1)", ExpressionEvaluationError.UnBalancedParanthesis "")
+
     printfn "\n\n\nRefractoredImpl\n\n"
     let printParsedOutput inputString =
         printfn "Original Expression : %A" inputString
@@ -211,3 +231,5 @@ let refractoredImplExamples = fun() ->
     successTestCases |> Map.iter printAllCases
     printfn "\n\nNumber of failed cases : %A " countOfFailed
     printfn "Number of success cases : %A " countOfSuccess
+    errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter printParsedOutput
+    errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
