@@ -1,25 +1,35 @@
 ﻿module RefractoredImpl
 open MathematicalExpressionParser
 open ParserBuildingBlocks
+open System
 
 let parseSingleTerm =
-    parseDouble
+    (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
+    |>> (fun (wholeNums, decimalPart) ->
+        match decimalPart with
+        | Some (decimalPoint, decimalPartDigits) ->
+            String(List.toArray(wholeNums @ [decimalPoint] @ decimalPartDigits))
+            |> double |> Expression.Constant
+        | None ->
+            String(List.toArray(wholeNums)) |> double |> Expression.Constant)
 
 let parseTerm =
     parseSingleTerm// <|> (between parseOpenBracket (parseSpaces >>. parseSingleTerm .>> parseSpaces) parseCloseBracket)
+    //<|> expParser
+
+let convertContExpressionsToSingleExpression (firstExp,operatorExpPairList) =
+    //Yet to write the logic
+    Expression.BinaryExpression (Expression.Constant 1., Plus, Expression.Constant 1.)
 
 let parseContinuousTerms =
-    parseTerm
-    //parseSpaces >>. (parseTerm .>>. (many (opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces) .>>. parseTerm))) .>> parseSpaces
+    parseSpaces >>. (parseTerm .>>. (many (opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces) .>>. parseTerm))) .>> parseSpaces
+    |>> convertContExpressionsToSingleExpression
 
 let parseExpression =
     parseContinuousTerms <|> (between parseOpenBracket (parseSpaces >>. parseContinuousTerms .>> parseSpaces) parseCloseBracket)
 
-let parseContinuousExpressions =
-    parseSpaces >>. (parseExpression .>>. (many (opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces) .>>. parseExpression))) .>> parseSpaces
-
 let getParsedOutput inputString =
-    run parseContinuousExpressions inputString
+    run parseExpression inputString
 
 let refractoredImplExamples = fun() ->
     let successTestCases = 
