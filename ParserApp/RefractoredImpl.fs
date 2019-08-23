@@ -95,7 +95,7 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
         | Expr someExp ->
             performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
 
-let convertContExpressionsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
+let convertContinuousTermsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
     let secondArgumentConvertedToSingleList =
         match operatorExpPairList with
         | [] -> []
@@ -108,7 +108,7 @@ let convertContExpressionsToSingleExpression (firstExp,(operatorExpPairList:(Tok
 
 let parseContinuousTerms expParser= fun() ->
     parseSpaces >>. ((parseTerm expParser) .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser)))) .>> parseSpaces
-    |>> convertContExpressionsToSingleExpression
+    |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression = fun() ->
      (parseContinuousTerms parseExpression) <*|*> (bracketedExpression parseExpression)
