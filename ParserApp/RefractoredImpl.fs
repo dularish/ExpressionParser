@@ -25,20 +25,26 @@ let OrElseSelectiveUnwrapping parser1 parser2 =
 let (<*|*>) = OrElseSelectiveUnwrapping
 
 let parseSingleTerm =
-    (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
+    (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
+        let wholeNumsWithNegSignIfNeeded =
+            match wholeNums with
+            | Some _ , wholeNumsList ->
+                '-' :: wholeNumsList
+            | _ , wholeNumsList ->
+                wholeNumsList
         match decimalPart with
         | Some (decimalPoint, decimalPartDigits) ->
-            String(List.toArray(wholeNums @ [decimalPoint] @ decimalPartDigits))
+            String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
             |> double |> Expression.Constant
         | None ->
-            String(List.toArray(wholeNums)) |> double |> Expression.Constant)
+            String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant)
 
 let bracketedExpression expParser = fun() ->
     (between parseOpenBracket (parseSpaces >>. expParser() .>> parseSpaces) parseCloseBracket)
 
 let parseTerm (expParser)=
-    (fun () -> parseSingleTerm)// <|> (between parseOpenBracket (parseSpaces >>. parseSingleTerm .>> parseSpaces) parseCloseBracket)
+    (fun () -> parseSingleTerm)
     <*|*> (bracketedExpression expParser)
 
 type ShuntingYardStreamCandidateTypes =
@@ -70,7 +76,20 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
             | None ->
                 Expression.Constant -1.
             | Some ( BinaryOperator someOp) ->
-                performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
+                match opStack with
+                | [] ->
+                    performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
+                | opStackTop :: opStackRest ->
+                    if ((getPriority(someOp) > getPriority(opStackTop)) || (((someOp = opStackTop) && ((getAssociativity someOp) = Right )))) then
+                        performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
+                    else
+                        match expStack with
+                        | topMostExp :: secondTopExp :: restExps ->
+                            let newExprToPush = BinaryExpression (secondTopExp, opStackTop, topMostExp)
+                            performShuntingYardLogicOnList (newExprToPush :: restExps) (opStackRest) streamList
+                        | _ ->
+                            //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
+                            Expression.Constant -1.
             | _ ->
                 Expression.Constant -1.
         | Expr someExp ->
@@ -79,8 +98,6 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
 
 
 let convertContExpressionsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
-    //Yet to write the logic
-    //Expression.BinaryExpression (Expression.Constant 1., Plus, Expression.Constant 1.)
     let secondArgumentConvertedToSingleList =
         match operatorExpPairList with
         | [] -> []
@@ -96,7 +113,7 @@ let parseContinuousTerms expParser= fun() ->
     |>> convertContExpressionsToSingleExpression
 
 let rec parseExpression = fun() ->
-    (bracketedExpression parseExpression) <*|*> (parseContinuousTerms parseExpression)
+     (parseContinuousTerms parseExpression) <*|*> (bracketedExpression parseExpression)
 
 let getParsedOutput inputString =
     run (parseExpression()) inputString
@@ -144,7 +161,7 @@ let refractoredImplExamples = fun() ->
             .Add("10/4", 2.5)
             .Add("5/3", 1.66)
             .Add("3 + 8/5 -1 -2*5", -6.4)
-            //.Add(" -5 + 2", -3.)
+            .Add(" -5 + 2", -3.)
             .Add("(2)", 2.)
             .Add("(5 + 2*3 - 1 + 7 * 8)", 66.)
             .Add("(67 + 2 * 3 - 67 + 2/1 - 7)", 1.)
