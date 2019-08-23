@@ -95,8 +95,6 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
         | Expr someExp ->
             performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
 
-
-
 let convertContExpressionsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
     let secondArgumentConvertedToSingleList =
         match operatorExpPairList with
@@ -117,6 +115,15 @@ let rec parseExpression = fun() ->
 
 let getParsedOutput inputString =
     run (parseExpression()) inputString
+
+let parseAndEvaluateExpressionExpressively (expressionString) =
+   let parsedExpression = getParsedOutput expressionString
+   match parsedExpression with
+   | Success (exp, remainingString) ->
+        ((EvaluateExpression (Some exp)), remainingString, Seq.ofList [])
+   | Failure failure ->
+        (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput "")) , "", Seq.ofList [])
+           
 
 let refractoredImplExamples = fun() ->
     let successTestCases = 
@@ -173,4 +180,34 @@ let refractoredImplExamples = fun() ->
         printfn "Original Expression : %A" inputString
         printfn "%A" (getParsedOutput inputString)
 
+    let mutable countOfFailed = 0
+    let mutable countOfSuccess = 0
+
+    let printAllCases (key:string) (expectedValue: double) =
+        let evaluatedResult = parseAndEvaluateExpressionExpressively key
+        match evaluatedResult with
+        | EvaluationFailure someString, _, variablesRef ->
+            printfn "\nFailure to evaluate %s" key
+            printfn "Evaluation Failure message : %A" someString
+            countOfFailed <- countOfFailed + 1
+        | EvaluationSuccess evaluatedValue , remaining , variablesRef->
+            if remaining.Trim().Length > 0 then
+                printfn "The following expression evaluated successfully but some text remaining"
+                printfn "Expression : %A" key
+                printfn "Remaining String : %A" remaining
+                printfn "Variables Referenced : %A" variablesRef
+            else
+                printfn "Expression : %A" key
+                printfn "Expected value : %A" expectedValue
+                printfn "Obtained value : %A" evaluatedValue
+                printfn "Variables Referenced : %A" variablesRef
+                printfn "Result : %A" (if expectedValue = evaluatedValue then "Success" else "Failure")
+                if expectedValue = evaluatedValue then
+                    countOfSuccess <- countOfSuccess + 1
+                else
+                    countOfFailed <- countOfFailed + 1
+
     successTestCases |> Map.toSeq |> Seq.map fst |> Seq.iter printParsedOutput
+    successTestCases |> Map.iter printAllCases
+    printfn "\n\nNumber of failed cases : %A " countOfFailed
+    printfn "Number of success cases : %A " countOfSuccess
