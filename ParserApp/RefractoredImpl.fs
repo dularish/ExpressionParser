@@ -3,6 +3,8 @@ open MathematicalExpressionParser
 open ParserBuildingBlocks
 open System
 
+type ExpressionEvaluationReturnType =
+    |ExpressionWithVariables of (Expression * string list)
 
 let OrElseSelectiveUnwrapping parser1 parser2 =
     let innerFn input =
@@ -25,6 +27,15 @@ let OrElseSelectiveUnwrapping parser1 parser2 =
 
 let (<^|^>) = OrElseSelectiveUnwrapping
 
+
+let AndThenSelectiveUnwrapping parser1Wrapped parser2Wrapped =
+    let parser1 = parser1Wrapped()
+    parser1 >>= (fun p1Result ->
+    let parser2 = parser2Wrapped()
+    parser2 >>= (fun p2Result ->
+        returnP(p1Result, p2Result)))
+let (.^>>^.) = AndThenSelectiveUnwrapping
+
 let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
@@ -36,17 +47,85 @@ let parseNumericTerm =
                 wholeNumsList
         match decimalPart with
         | Some (decimalPoint, decimalPartDigits) ->
-            String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
-            |> double |> Expression.Constant
+            let doubleExp = String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
+                            |> double |> Expression.Constant
+            ExpressionWithVariables (doubleExp, [])
         | None ->
-            String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant)
+            let doubleExp = String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant
+            ExpressionWithVariables (doubleExp, []))
 
-let parseBracketedExpression expParser = fun() ->
-    (between parseOpenBracket (parseSpaces >>. expParser() .>> parseSpaces) parseCloseBracket)
+let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
+    (between parseOpenBracket (parseSpaces >>. (expParser variablesRef)() .>> parseSpaces) parseCloseBracket)
 
-let parseTerm (expParser)=
-    (fun () -> parseNumericTerm)
-    <^|^> (parseBracketedExpression expParser)
+let unaryStrToUnaryOpUnion input =
+    if input = "exp" then ( (Exp))
+    elif input = "sin" then ( (Sin))
+    elif input = "cos" then ( (Cos))
+    elif input = "tan" then ((Tan))
+    elif input = "asin" then ((ASin))
+    elif input = "acos" then ((ACos))
+    elif input = "atan" then ((ATan))
+    elif input = "sinh" then ((Sinh))
+    elif input = "cosh" then ((Cosh))
+    elif input = "tanh" then ((Tanh))
+    elif input = "asinh" then ((ASinh))
+    elif input = "acosh" then ((ACosh))
+    elif input = "atanh" then ((ATanh))
+    elif input = "log" then ((Log))
+    elif input = "ln" then ((Ln))
+    elif input = "floor" then ((Floor))
+    elif input = "ceil" then ((Ceil))
+    elif input = "sqrt" then ((Sqrt))
+    else ((Abs))
+
+let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationReturnType>))= fun() ->
+    let parseUnaryOp = 
+        unaryOps
+        |> Seq.sortByDescending (fun x -> x.Length)
+        |> Seq.map (fun x -> pString x)
+        |> List.ofSeq
+        |> choice
+        |>> unaryStrToUnaryOpUnion
+    let expParsed = ((fun () -> (parseUnaryOp .>> parseSpaces)) .^>>^. termParser)
+    expParsed
+    |>> (fun (unaryOp, (ExpressionWithVariables (expr, varList))) -> ExpressionWithVariables ((UnaryExpression (unaryOp, expr)), varList) )
+    
+let returnFailure x = 
+    let innerFn input =
+        Failure (x)
+    Parser innerFn
+
+let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesReferenced:string list)= fun() ->
+    let parseVariable =
+        variables.Keys
+        |> Seq.sortByDescending (fun x -> x.Length)
+        |> Seq.map (fun x -> pString x)
+        |> List.ofSeq
+        |> choice
+    parseVariable
+    >>= (fun s ->
+                let variableExpr = variables.[s]
+                if (variablesReferenced |> List.contains s) then
+                    returnFailure (sprintf "Circular referencing of variable %s" s)
+                else
+                    let newVariablesRef = s :: variablesReferenced
+                    run ((expParser (newVariablesRef))()) variableExpr
+                    |> (fun x ->
+                            match x with
+                            | Success (successResult, _) ->
+                                returnP (successResult)
+                            | Failure (failureResult) ->
+                                returnFailure (failureResult))
+                    )
+
+let rec parseTerm (expParser) (variablesRef) = fun() ->
+    (fun() -> (fun () -> parseNumericTerm) 
+                <^|^> 
+                (fun () -> (parsePrefixedUnaryOpTerm (parseTerm (expParser) variablesRef))
+                            <^|^>
+                            (parseVariableTerm expParser variablesRef))
+                )
+    <^|^> (parseBracketedExpression expParser variablesRef)
 
 type ShuntingYardStreamCandidateTypes =
     | MaybeOperator of Token option
@@ -99,13 +178,13 @@ let rec performShuntingYardLogicOnList expStack opStack streamList =
         | Expr someExp ->
             performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
 
-let convertContinuousTermsToSingleExpression (firstExp,(operatorExpPairList:(Token option * Expression)list)) =
-    let secondArgumentConvertedToSingleList =
+let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationReturnType),(operatorExpPairList:(Token option * (ExpressionEvaluationReturnType))list)) =
+    let secondArgumentConvertedToSingleExprList =
         match operatorExpPairList with
         | [] -> []
         | _ ->
             operatorExpPairList
-            |> List.map (fun (x,y) -> 
+            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> 
                             match x with
                             | Some operatorToken ->
                                 [MaybeOperator x]@[Expr y]
@@ -114,26 +193,41 @@ let convertContinuousTermsToSingleExpression (firstExp,(operatorExpPairList:(Tok
                                 //Example cases : "2(4)", "(1+2)(2+3)"
                                 [MaybeOperator (Some (BinaryOperator Multiply))]@[Expr y])
             |> List.reduce (@)
-    ((Expr firstExp) :: secondArgumentConvertedToSingleList)
-    |> performShuntingYardLogicOnList [] []
+    let secondArgumentConvertedToSingleVariablesList =
+        match operatorExpPairList with
+        | [] -> []
+        | _ ->
+            operatorExpPairList
+            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> varList)
+            |> List.reduce (@)
+    match firstExp with
+    | ExpressionWithVariables (firstExpr, firstVarList) ->
+        let expr = ((Expr ((firstExpr))) :: secondArgumentConvertedToSingleExprList)
+                    |> performShuntingYardLogicOnList [] []
+        let varList = (firstVarList) @ (secondArgumentConvertedToSingleVariablesList)
+                      |> List.distinct
+        ExpressionWithVariables (expr, varList)
 
-let parseContinuousTerms expParser= fun() ->
-    parseSpaces >>. ((parseTerm expParser) .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser)))) .>> parseSpaces
+
+let parseContinuousTerms expParser variablesRef= fun() ->
+    parseSpaces >>. ((parseTerm expParser variablesRef)() .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser variablesRef)()))) .>> parseSpaces
     |>> convertContinuousTermsToSingleExpression
 
-let rec parseExpression = fun() ->
-     (parseContinuousTerms parseExpression) <^|^> (parseBracketedExpression parseExpression)
+let rec parseExpression variablesRef= fun() ->
+     (parseContinuousTerms (parseExpression) variablesRef) <^|^> (parseBracketedExpression (parseExpression) variablesRef)
 
 let getParsedOutput inputString =
-    run (parseExpression()) inputString
+    run ((parseExpression [])()) inputString
 
 let parseAndEvaluateExpressionExpressively (expressionString) =
    let parsedExpression = getParsedOutput expressionString
    match parsedExpression with
-   | Success (exp, remainingString) ->
+   | Success (expReturnType, remainingString) ->
         match remainingString.Trim().Length with
         | 0 ->
-            ((EvaluateExpression (Some exp)), remainingString, Seq.ofList [])
+            match expReturnType with
+            | ExpressionWithVariables (expr, varList) ->
+                ((EvaluateExpression (Some expr)), remainingString, Seq.ofList varList)
         | _ ->
             (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing (sprintf "Could not parse the remaining string : %A" remainingString))) , "", Seq.ofList [])
    | Failure failure ->
@@ -255,3 +349,21 @@ let refractoredImplExamples = fun() ->
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
     printfn "Developer didn't handle it deliberately cases :"
     developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+
+    printfn "\nCustom cases : "
+    let customCases = 
+        [
+        "sin 0";
+        "cos 0";
+        "cos 0.5";
+        "ceil cos 0.5";
+        "floor cos 0.5";
+        "cos 0.5 * 2";
+        "cos 1.0"
+        ]
+    customCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+
+    printfn "\n\nVariables test cases : "
+    let variableTestCases =
+        ["variableA + variableB"; "variableC + variableA"]
+    variableTestCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
