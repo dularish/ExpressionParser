@@ -112,8 +112,8 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
                     run ((expParser (newVariablesRef))()) variableExpr
                     |> (fun x ->
                             match x with
-                            | Success (successResult, _) ->
-                                returnP (successResult)
+                            | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _) ->
+                                returnP (ExpressionWithVariables(expressionParsed, [s]))
                             | Failure (failureResult) ->
                                 returnFailure (failureResult))
                     )
@@ -216,11 +216,12 @@ let parseContinuousTerms expParser variablesRef= fun() ->
 let rec parseExpression variablesRef= fun() ->
      (parseContinuousTerms (parseExpression) variablesRef) <^|^> (parseBracketedExpression (parseExpression) variablesRef)
 
-let getParsedOutput inputString =
-    run ((parseExpression [])()) inputString
+let getParsedOutput inputString (variableNameBeingEvaluated) =
+    run ((parseExpression [variableNameBeingEvaluated])()) inputString
 
-let parseAndEvaluateExpressionExpressively (expressionString) =
-   let parsedExpression = getParsedOutput expressionString
+let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (variableNameBeingEvaluated) =
+   variables <- variablesDict
+   let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated
    match parsedExpression with
    | Success (expReturnType, remainingString) ->
         match remainingString.Trim().Length with
@@ -318,7 +319,7 @@ let refractoredImplExamples = fun() ->
     let mutable countOfSuccess = 0
 
     let printAllCases (key:string) (expectedValue: double) =
-        let evaluatedResult = parseAndEvaluateExpressionExpressively key
+        let evaluatedResult = parseAndEvaluateExpressionExpressively key variables "someUniqueName"
         match evaluatedResult with
         | EvaluationFailure someString, _, variablesRef ->
             printfn "\nFailure to evaluate %s" key
@@ -346,9 +347,9 @@ let refractoredImplExamples = fun() ->
     printfn "\n\nNumber of failed cases : %A " countOfFailed
     printfn "Number of success cases : %A " countOfSuccess
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter printParsedOutput
-    errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+    errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     printfn "Developer didn't handle it deliberately cases :"
-    developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+    developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
 
     printfn "\nCustom cases : "
     let customCases = 
@@ -361,9 +362,9 @@ let refractoredImplExamples = fun() ->
         "cos 0.5 * 2";
         "cos 1.0"
         ]
-    customCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+    customCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
 
     printfn "\n\nVariables test cases : "
     let variableTestCases =
         ["variableA + variableB"; "variableC + variableA"]
-    variableTestCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s))
+    variableTestCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))

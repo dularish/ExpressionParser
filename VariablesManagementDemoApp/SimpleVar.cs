@@ -117,11 +117,15 @@ namespace VariablesManagementDemoApp
         private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
             Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.ToDictionary(s => s.Name, s => s.StrValue);
-            var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
+            //var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
+            
+            var parsedOutput = RefractoredImpl.parseAndEvaluateExpressionExpressively(value, dictForEvaluation, this.Name);
+
+            List<string> refVariables = parsedOutput.Item3.ToList();
 
             List<SimpleVar> dependencyVariablesLocal = new List<SimpleVar>();
 
-            foreach (var variableName in parsedOutput.Item3.Distinct())
+            foreach (var variableName in refVariables.Distinct())
             {
                 SimpleVar variableMatched = _centralizedVariablesCollection.Where(s => s.Name == variableName).FirstOrDefault();
 
