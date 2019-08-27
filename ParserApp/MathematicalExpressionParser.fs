@@ -54,6 +54,7 @@ type Expression =
     | Constant of double
     | BinaryExpression of Expression*BinaryOperator*Expression
     | UnaryExpression of UnaryOperator * Expression
+    | StringExpression of string
 
 type Token = 
     | DoubleConstant of double
@@ -62,10 +63,11 @@ type Token =
     | Bracket of Brackets
     | Variable of string
     | MasterKeywordVariable of string
+    | QuotedString of string
 
 type StableToken =
-    | Operator
-    | Expression
+    | Operator of BinaryOperator
+    | Expression of Expression
 
 let doubleToUnion input =
     Token.DoubleConstant input
@@ -168,15 +170,6 @@ let parseVariable = fun() ->
     |> choice
     |>> variableNameToToken
 
-let parseSpaces = many (pChar ' ') 
-let parseAToken = fun() ->
-    if variables.Count > 0 then
-        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseUnaryOp <|> parseArithmeticOp <|> parseDouble <|> (parseVariable()) <|> parseMasterVariable)
-    else
-        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> parseMasterVariable)
-
-let parseTwoTokens =
-    (parseAToken() .>>. parseAToken())
 
 let parseQuotedStringInnerValuesChoices =
     let alphabets =
@@ -189,6 +182,18 @@ let parseQuotedStringInnerValuesChoices =
 let parseQuotedString = 
     ((pChar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pChar '"'))
     |>> List.reduce (+)
+    |>> fun a -> QuotedString a
+
+let parseSpaces = many (pChar ' ') 
+let parseAToken = fun() ->
+    if variables.Count > 0 then
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseUnaryOp <|> parseArithmeticOp <|> parseDouble <|> parseQuotedString <|> (parseVariable()) <|> parseMasterVariable)
+    else
+        parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseArithmeticOp <|> parseDouble <|> parseQuotedString <|> parseMasterVariable)
+
+let parseTwoTokens =
+    (parseAToken() .>>. parseAToken())
+
 
 type EntryType = 
     | Token of Token
@@ -250,6 +255,8 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     let rec getTheNextTermAsExpression = fun(expressionString:string) ->
         let nextToken = run (parseAToken()) expressionString
         match nextToken with
+        | Success (Token.QuotedString quotedString, remainingAfterStringExp) ->
+            (ExpressionParsingSuccess (Some (Expression.StringExpression quotedString)), remainingAfterStringExp, 0, [])
         | Success (Token.Bracket BracketOpen, remainingAfterBracketOpen) ->
             let resultToEndOfBracket, finalRemaining, numberOfBracketsOpenedInResult, resultVariablesRef = tryParseMathExpressionByAppr2 remainingAfterBracketOpen ([]) ([]) (1) [] None variablesComputationPath
             if numberOfBracketsOpenedInResult > 0 then
@@ -324,7 +331,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
         //When it's a bracket close expression, we return the expression parsed till this bracket and let the caller handle the rest of the expression after this bracket close
             //The caller as per current implementation could only be the helper function
         if openedBracketsCount = 1 then
-            let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (Some (StableToken.Expression)) variablesComputationPath
+            let parsedResult, remainingStringAfterBracketClose, numberOfOpenedBrackets, _ = tryParseMathExpressionByAppr2 "" stackExp stackOp (openedBracketsCount - 1) refVariables (lastToken) variablesComputationPath
             match parsedResult with
             | ExpressionParsingSuccess parsedExpression ->
                 match parsedExpression with
@@ -340,24 +347,25 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
     | Success (Token.DoubleConstant _, _)
     | Success (Token.MasterKeywordVariable _, _)
     | Success (Token.Variable _, _)
+    | Success (Token.QuotedString _, _)
     | Success (Token.UnaryOperator _, _) ->
         //All these matched types mean, that the next term can be converted to an expression with the help of the helper function that we have built
             //But the lastToken matched before must be either None or an operator, which means the current implementation doesn't support "(1+3)(2+4)" or "2(4)"
         match lastToken with
         | None
-        | Some (StableToken.Operator) ->
+        | Some (StableToken.Operator _) ->
             let (resultToEndOfBracket, finalRemaining, isResultOpened, resultVariablesRef) = getTheNextTermAsExpression(input)
             let totalVariablesRef = (refVariables @ resultVariablesRef) |> List.distinct
             match resultToEndOfBracket with
             | ExpressionParsingSuccess parsedResult ->
                 match parsedResult with
                 | Some someResultToOtherEnd ->
-                    tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression)) variablesComputationPath
+                    tryParseMathExpressionByAppr2 finalRemaining (someResultToOtherEnd :: stackExp) (stackOp) (openedBracketsCount) (totalVariablesRef) (Some (StableToken.Expression someResultToOtherEnd)) variablesComputationPath
                 | None ->
                     (ExpressionParsingFailure (EmptyExpression input), finalRemaining, openedBracketsCount, totalVariablesRef)//This is not expected when user enters multiplication even before brackets
             | ExpressionParsingFailure failure ->
                 (ExpressionParsingFailure failure, input, openedBracketsCount, totalVariablesRef)
-        | Some (StableToken.Expression) ->
+        | Some (StableToken.Expression _) ->
             (ExpressionParsingFailure (MissingOperator input), input, openedBracketsCount, refVariables)
     | Success (Token.BinaryOperator opMatched, remaining) ->
         //When an operator is matched,
@@ -377,7 +385,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     match parsedResult with
                     | Some someResultToOtherEnd ->
                         let expressionToPass = BinaryExpression ( Expression.Constant (-1.0), BinaryOperator.Multiply, someResultToOtherEnd) 
-                        tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression)) variablesComputationPath
+                        tryParseMathExpressionByAppr2 remainingAfterExpressionTerm (expressionToPass::stackExp) (stackOp) (openedBracketsCount) totalVariablesRef (Some (StableToken.Expression someResultToOtherEnd)) variablesComputationPath
                     | None ->
                         //Control to this point not expected, if it reaches this point, developer has to be know
                         (ExpressionParsingFailure (EmptyExpression remaining), input, openedBracketsCount, totalVariablesRef)
@@ -385,13 +393,13 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     (ExpressionParsingFailure failure, remaining, openedBracketsCount, totalVariablesRef)
             | _ ->
                 (ExpressionParsingFailure (OperatorNotExpected remaining), input, openedBracketsCount, refVariables)
-        | Some (StableToken.Expression) ->
+        | Some (StableToken.Expression _) ->
             match stackOp with
             | [] ->
-                tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator)) variablesComputationPath
+                tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator opMatched)) variablesComputationPath
             | stackTopOp :: restOps ->
                 if ((getPriority(opMatched) > getPriority(stackTopOp)) || (((opMatched = stackTopOp) && ((getAssociativity opMatched) = Right )))) then
-                    tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator)) variablesComputationPath
+                    tryParseMathExpressionByAppr2 remaining (stackExp) (opMatched :: stackOp) (openedBracketsCount) refVariables (Some (StableToken.Operator opMatched)) variablesComputationPath
                 else
                     match stackExp with
                     | topMostExp :: secondTopExp :: restExps ->
@@ -400,7 +408,7 @@ let rec tryParseMathExpressionByAppr2 input (stackExp:Expression list) (stackOp:
                     | _ ->
                         //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
                         (ExpressionParsingFailure (NotEnoughOperands remaining), input, openedBracketsCount, refVariables)
-        | Some (StableToken.Operator) ->
+        | Some (StableToken.Operator _) ->
             (ExpressionParsingFailure (SequencingOfOperatorsNotAllowed input), input, openedBracketsCount, refVariables)
     | Failure (_) ->
         //Failure can also possibly mean that the string is run out of characters to parse but the stacks of operators and expressions need to be resolved
@@ -436,75 +444,100 @@ type ExpressionEvaluationError =
     | UnBalancedParanthesis of string
     | ParsingError of MathExpressionParsingFailureType
 
+type AllowedEvaluationResultTypes =
+    | Double of double
+    | String of string
+
+let getStringValueOfEvaluationResultType (evaluationResultTypeValue) =
+    match evaluationResultTypeValue with
+    | Double x -> x.ToString()
+    | String x -> x
+
 type ExpressionEvaluationResult =
-    | EvaluationSuccess of double
+    | EvaluationSuccess of AllowedEvaluationResultTypes
     | EvaluationFailure of ExpressionEvaluationError
 
-let computeBinaryExpression operand1 operator operand2 =
-    match operator with
-    | Plus ->
-        EvaluationSuccess (operand1 + operand2)
-    | Minus ->
-        EvaluationSuccess (operand1 - operand2)
-    | Multiply ->
-        EvaluationSuccess (operand1 * operand2)
-    | Pow ->
-        EvaluationSuccess (operand1 ** operand2)
-    | Modulo ->
-        EvaluationSuccess (operand1 % operand2)
-    | Divide ->
-        if operand2 = 0. then
-            EvaluationFailure (DivideByZeroAttempted ("Expression tried to evaluate : " + operand1.ToString() + operator.ToString() + operand2.ToString()))
-        else
-            EvaluationSuccess (operand1 / operand2)
+let computeBinaryExpression (operand1:AllowedEvaluationResultTypes) operator (operand2:AllowedEvaluationResultTypes) =
+    match (operand1, operand2) with
+    | (Double operand1DoubleValue, Double operand2DoubleValue) ->
+        match operator with
+        | Plus ->
+            EvaluationSuccess (Double (operand1DoubleValue + operand2DoubleValue))
+        | Minus ->
+            EvaluationSuccess (Double (operand1DoubleValue - operand2DoubleValue))
+        | Multiply ->
+            EvaluationSuccess (Double (operand1DoubleValue * operand2DoubleValue))
+        | Pow ->
+            EvaluationSuccess (Double (operand1DoubleValue ** operand2DoubleValue))
+        | Modulo ->
+            EvaluationSuccess (Double (operand1DoubleValue % operand2DoubleValue))
+        | Divide ->
+            if operand2DoubleValue = 0. then
+                EvaluationFailure (DivideByZeroAttempted ("Expression tried to evaluate : " + operand1DoubleValue.ToString() + operator.ToString() + operand2DoubleValue.ToString()))
+            else
+                EvaluationSuccess (Double (operand1DoubleValue / operand2DoubleValue))
+    | (Double _, String _)
+    | (String _, Double _)
+    | (String _, String _) ->
+        match operator with
+        | Plus ->
+            EvaluationSuccess (String (getStringValueOfEvaluationResultType(operand1) + getStringValueOfEvaluationResultType(operand2)))
+        | _ ->
+           EvaluationFailure (InvalidOperatorUse (sprintf "Operator %A cannot be used with String types" operator)) 
 
-let computeUnaryExpression operator operand1 =
-    match operator with
-    | Exp ->
-        EvaluationSuccess (Math.Pow(Math.E, operand1))
-    | Sin ->
-        EvaluationSuccess (Math.Sin(operand1))
-    | Cos ->
-        EvaluationSuccess (Math.Cos(operand1))
-    | Tan ->
-        EvaluationSuccess (Math.Tan(operand1))
-    | Sinh ->
-        EvaluationSuccess (Math.Sinh(operand1))
-    | Cosh ->
-        EvaluationSuccess (Math.Cosh(operand1))
-    | Tanh ->
-        EvaluationSuccess (Math.Tanh(operand1))
-    | ASin ->
-        EvaluationSuccess (1./Math.Sin(operand1))
-    | ACos ->
-        EvaluationSuccess (1./Math.Cos(operand1))
-    | ATan ->
-        EvaluationSuccess (1./Math.Tan(operand1))
-    | ASinh ->
-        EvaluationSuccess (1./Math.Sinh(operand1))
-    | ACosh ->
-        EvaluationSuccess (1./Math.Cosh(operand1))
-    | ATanh ->
-        EvaluationSuccess (1./Math.Tanh(operand1))
-    | Log ->
-        EvaluationSuccess (Math.Log10(operand1))
-    | Ln ->
-        EvaluationSuccess (Math.Log(operand1))
-    | Floor ->
-        EvaluationSuccess (Math.Floor(operand1))
-    | Ceil ->
-        EvaluationSuccess (Math.Ceiling(operand1))
-    | Sqrt ->
-        EvaluationSuccess (Math.Sqrt(operand1))
-    | Abs ->
-        EvaluationSuccess (Math.Abs(operand1))
+let computeUnaryExpression operator (operand1:AllowedEvaluationResultTypes) =
+    match operand1 with
+    | (String _) ->
+        EvaluationFailure (InvalidOperatorUse (sprintf "Unary Operator %A cannot be used with String types" operator))
+    | (Double operand1DoubleValue) ->
+        match operator with
+        | Exp ->
+            EvaluationSuccess (Double (Math.Pow(Math.E, operand1DoubleValue)))
+        | Sin ->
+            EvaluationSuccess (Double (Math.Sin(operand1DoubleValue)))
+        | Cos ->
+            EvaluationSuccess (Double (Math.Cos(operand1DoubleValue)))
+        | Tan ->
+            EvaluationSuccess (Double (Math.Tan(operand1DoubleValue)))
+        | Sinh ->
+            EvaluationSuccess (Double (Math.Sinh(operand1DoubleValue)))
+        | Cosh ->
+            EvaluationSuccess (Double (Math.Cosh(operand1DoubleValue)))
+        | Tanh ->
+            EvaluationSuccess (Double (Math.Tanh(operand1DoubleValue)))
+        | ASin ->
+            EvaluationSuccess (Double (1./Math.Sin(operand1DoubleValue)))
+        | ACos ->
+            EvaluationSuccess (Double (1./Math.Cos(operand1DoubleValue)))
+        | ATan ->
+            EvaluationSuccess (Double (1./Math.Tan(operand1DoubleValue)))
+        | ASinh ->
+            EvaluationSuccess (Double (1./Math.Sinh(operand1DoubleValue)))
+        | ACosh ->
+            EvaluationSuccess (Double (1./Math.Cosh(operand1DoubleValue)))
+        | ATanh ->
+            EvaluationSuccess (Double (1./Math.Tanh(operand1DoubleValue)))
+        | Log ->
+            EvaluationSuccess (Double (Math.Log10(operand1DoubleValue)))
+        | Ln ->
+            EvaluationSuccess (Double (Math.Log(operand1DoubleValue)))
+        | Floor ->
+            EvaluationSuccess (Double (Math.Floor(operand1DoubleValue)))
+        | Ceil ->
+            EvaluationSuccess (Double (Math.Ceiling(operand1DoubleValue)))
+        | Sqrt ->
+            EvaluationSuccess (Double (Math.Sqrt(operand1DoubleValue)))
+        | Abs ->
+            EvaluationSuccess (Double (Math.Abs(operand1DoubleValue)))
 
 let rec EvaluateExpression (exp: Expression option) =
     match exp with
     | Some someExp ->
         match someExp with
         | Constant doubleConstant ->
-            EvaluationSuccess doubleConstant
+            EvaluationSuccess (Double doubleConstant)
+        | StringExpression quotedString ->
+            EvaluationSuccess (String quotedString)
         | BinaryExpression (exp1, operator, exp2) ->
             let exp1Result = EvaluateExpression (Some exp1)
             let exp2Result = EvaluateExpression (Some exp2)
@@ -630,14 +663,14 @@ let examplesForMathematicalExpressionParser =
             printfn "\nFailure to evaluate %s" key
             printfn "Evaluation Failure message : %A" someString
             countOfFailed <- countOfFailed + 1
-        | EvaluationSuccess evaluatedValue , remaining, variablesRef ->
+        | EvaluationSuccess (evaluatedValue) , remaining, variablesRef ->
             if remaining.Trim().Length > 0 then
                 printfn "The following expression evaluated successfully but some text remaining"
                 printfn "Expression : %A" key
                 printfn "Remaining String : %A" remaining
                 printfn "Variables referenced : %A" variablesRef
 
-            if evaluatedValue <> expectedValue then
+            if (getStringValueOfEvaluationResultType evaluatedValue) <> (expectedValue.ToString()) then
                 printfn "The following expression does not evaluate to the expected value :"
                 printfn "Expression : %A" key
                 printfn "Expected value : %A" expectedValue
@@ -662,8 +695,10 @@ let examplesForMathematicalExpressionParser =
                 printfn "Expected value : %A" expectedValue
                 printfn "Obtained value : %A" evaluatedValue
                 printfn "Variables Referenced : %A" variablesRef
-                printfn "Result : %A" (if expectedValue = evaluatedValue then "Success" else "Failure")
-                if expectedValue = evaluatedValue then
+                let isResultSuccess = 
+                    (expectedValue.ToString()) = (getStringValueOfEvaluationResultType evaluatedValue)
+                printfn "Result : %A" (if isResultSuccess then "Success" else "Failure")
+                if isResultSuccess then
                     countOfSuccess <- countOfSuccess + 1
                 else
                     countOfFailed <- countOfFailed + 1
