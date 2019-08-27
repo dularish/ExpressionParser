@@ -336,8 +336,10 @@ let refractoredImplExamples = fun() ->
                 printfn "Expected value : %A" expectedValue
                 printfn "Obtained value : %A" evaluatedValue
                 printfn "Variables Referenced : %A" variablesRef
-                printfn "Result : %A" (if expectedValue = evaluatedValue then "Success" else "Failure")
-                if expectedValue = evaluatedValue then
+                let isResultSuccess = 
+                    (expectedValue.ToString()) = (getStringValueOfEvaluationResultType evaluatedValue)
+                printfn "Result : %A" (if isResultSuccess then "Success" else "Failure")
+                if isResultSuccess then
                     countOfSuccess <- countOfSuccess + 1
                 else
                     countOfFailed <- countOfFailed + 1
