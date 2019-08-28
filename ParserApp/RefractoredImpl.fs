@@ -6,7 +6,7 @@ open System
 type ExpressionEvaluationReturnType =
     |ExpressionWithVariables of (Expression * string list)
 
-let OrElseSelectiveUnwrapping parser1 parser2 =
+let lazyOrElse parser1 parser2 =
     let innerFn input =
         if (String.length input) = 0 then
             //Added to prevent stackOverflow//But in the long term prevent control getting here
@@ -25,16 +25,21 @@ let OrElseSelectiveUnwrapping parser1 parser2 =
                     Failure err
     Parser innerFn        
 
-let (<^|^>) = OrElseSelectiveUnwrapping
+let (<^|^>) = lazyOrElse
+
+let lazyChoice (listOfLazyParsers) =
+    listOfLazyParsers
+    |> List.reduce (fun x y ->
+                        fun () -> lazyOrElse x y)
 
 
-let AndThenSelectiveUnwrapping parser1Wrapped parser2Wrapped =
+let lazyAndThen parser1Wrapped parser2Wrapped =
     let parser1 = parser1Wrapped()
     parser1 >>= (fun p1Result ->
     let parser2 = parser2Wrapped()
     parser2 >>= (fun p2Result ->
         returnP(p1Result, p2Result)))
-let (.^>>^.) = AndThenSelectiveUnwrapping
+let (.^>>^.) = lazyAndThen
 
 let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
@@ -118,14 +123,13 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
                                 returnFailure (failureResult))
                     )
 
-let rec parseTerm (expParser) (variablesRef) = fun() ->
-    (fun() -> (fun () -> parseNumericTerm) 
-                <^|^> 
-                (fun () -> (parsePrefixedUnaryOpTerm (parseTerm (expParser) variablesRef))
-                            <^|^>
-                            (parseVariableTerm expParser variablesRef))
-                )
-    <^|^> (parseBracketedExpression expParser variablesRef)
+let rec parseTerm (expParser) (variablesRef) = fun () ->
+    let res = [(fun () -> parseNumericTerm); 
+                    (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
+                    (parseVariableTerm expParser variablesRef);
+                    (parseBracketedExpression expParser variablesRef)]
+                |> lazyChoice
+    res()
 
 type ShuntingYardStreamCandidateTypes =
     | MaybeOperator of Token option
@@ -213,7 +217,7 @@ let parseContinuousTerms expParser variablesRef= fun() ->
     parseSpaces >>. ((parseTerm expParser variablesRef)() .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser variablesRef)()))) .>> parseSpaces
     |>> convertContinuousTermsToSingleExpression
 
-let rec parseExpression variablesRef= fun() ->
+let rec parseExpression variablesRef= fun () ->
      (parseContinuousTerms (parseExpression) variablesRef) <^|^> (parseBracketedExpression (parseExpression) variablesRef)
 
 let getParsedOutput inputString (variableNameBeingEvaluated) =
