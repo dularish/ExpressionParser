@@ -7,23 +7,24 @@ type ExpressionEvaluationReturnType =
     |ExpressionWithVariables of (Expression * string list)
 
 let lazyOrElse parser1 parser2 =
-    let innerFn input =
-        if (String.length input) = 0 then
+    let label = sprintf "lazy OrElse"
+    let innerFn (input:InputState) =
+        if (String.length (currentLine input)) = 0 then
             //Added to prevent stackOverflow//But in the long term prevent control getting here
-            Failure "No more inputs"
+            Failure (label, "No more inputs", parserPositionFromInputState input)
         else
-            let result1 = run (parser1()) input
+            let result1 = runOnInput (parser1()) input
             match result1 with
             | Success (matched1, remaining) ->
                 Success (matched1, remaining)
-            | Failure err ->
-                let result2 = run (parser2()) input
+            | Failure (errorLabel,err,pos) ->
+                let result2 = runOnInput (parser2()) input
                 match result2 with
                 | Success (matched2,remaining2) ->
                     Success (matched2, remaining2)
-                | Failure err ->
-                    Failure err
-    Parser innerFn        
+                | Failure (errorLabel2,err2,pos2) ->
+                    Failure (errorLabel2,err2,pos2)
+    {parseFn= innerFn;label=label}
 
 let (<^|^>) = lazyOrElse
 
@@ -34,13 +35,12 @@ let lazyChoice (listOfLazyParsers) =
 
 
 let lazyAndThen parser1Wrapped parser2Wrapped =
-    let parser1 = parser1Wrapped()
+    let parser1 = parser1Wrapped() <?> "lazy AndThen firstOp"
     parser1 >>= (fun p1Result ->
-    let parser2 = parser2Wrapped()
+    let parser2 = parser2Wrapped() <?> "lazy AndThen secondOp"
     parser2 >>= (fun p2Result ->
         returnP(p1Result, p2Result)))
 let (.^>>^.) = lazyAndThen
-
 let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
@@ -58,6 +58,7 @@ let parseNumericTerm =
         | None ->
             let doubleExp = String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant
             ExpressionWithVariables (doubleExp, []))
+    <?> "numeric term"
 
 let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
     (between parseOpenBracket (parseSpaces >>. (expParser variablesRef)() .>> parseSpaces) parseCloseBracket)
