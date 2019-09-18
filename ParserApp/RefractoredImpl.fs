@@ -99,7 +99,7 @@ let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationRet
 let returnFailure x = 
     let innerFn input =
         Failure (x)
-    Parser innerFn
+    {parseFn= innerFn; label ="returnFailure"}
 
 let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesReferenced:string list)= fun() ->
     let parseVariable =
@@ -112,7 +112,7 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
     >>= (fun s ->
                 let variableExpr = variables.[s]
                 if (variablesReferenced |> List.contains s) then
-                    returnFailure (sprintf "Circular referencing of variable %s" s)
+                    returnFailure ("variable",(sprintf "Circular referencing of variable %s" s), (parserPositionFromInputState initialPos))//To be changed in the future
                 else
                     let newVariablesRef = s :: variablesReferenced
                     run ((expParser (newVariablesRef))()) variableExpr
