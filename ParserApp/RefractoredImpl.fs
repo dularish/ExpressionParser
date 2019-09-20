@@ -329,6 +329,13 @@ let refractoredImplExamples = fun() ->
             "2 + 1\n +" + "3 + 2"
         ]
 
+    let errorMessagesImprovementNeededInputs =
+        [
+            "(6 + c)";
+            "2 + (5 * 2";
+            "sin a"
+        ]
+
     printfn "\n\n\nRefractoredImpl\n\n"
     let printParsedOutput inputString =
         printfn "Original Expression : %A" inputString
@@ -372,7 +379,7 @@ let refractoredImplExamples = fun() ->
     printfn "Developer didn't handle it deliberately cases :"
     developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     multiLineInputs |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
-
+    errorMessagesImprovementNeededInputs |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     printfn "\nCustom cases : "
     let customCases = 
         [
