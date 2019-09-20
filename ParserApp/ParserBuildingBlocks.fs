@@ -371,6 +371,20 @@ let oneOrMoreDigits =
 let zeroOrMoreDigits =
     sepBy parseDigit (pChar ';')
 
+let generateResultText result =
+    match result with
+    | Success (value, input) ->
+        sprintf "%A" value
+    | Failure (label, err, parserPos) ->
+        let errorLine = parserPos.currentLine
+        let colPos = parserPos.column
+        let linePos = parserPos.line
+        let failureCaret = sprintf "%*s^%s" colPos "" err
+        sprintf "Line:%i Col:%i Error parsing %s\n%s\n%s" linePos colPos label errorLine failureCaret
+
+let printResult result =
+    printfn "%s" (generateResultText result)
+
 let examplesForTestingParserBuildingBlocks =
     printfn "Testing a line"
     let stringInput = "ABC"

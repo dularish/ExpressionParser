@@ -6,7 +6,6 @@
   <ItemGroup>
     <Compile Include="ParserBuildingBlocks.fs" />
     <Compile Include="MathematicalExpressionParser.fs" />
-    <Compile Include="BackedUpApproach.fs" />
     <Compile Include="RefractoredImpl.fs" />
     <Compile Include="Library.fs" />
   </ItemGroup>

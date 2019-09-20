@@ -112,7 +112,7 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
     >>= (fun s ->
                 let variableExpr = variables.[s]
                 if (variablesReferenced |> List.contains s) then
-                    returnFailure ("variable",(sprintf "Circular referencing of variable %s" s), (parserPositionFromInputState initialPos))//To be changed in the future
+                    returnFailure ("variable",(sprintf "Circular referencing of variable %s" s), ({column=0;line= 0; currentLine = variableExpr}))//To be changed in the future
                 else
                     let newVariablesRef = s :: variablesReferenced
                     run ((expParser (newVariablesRef))()) variableExpr
@@ -120,17 +120,26 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
                             match x with
                             | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _) ->
                                 returnP (ExpressionWithVariables(expressionParsed, [s]))
-                            | Failure (failureResult) ->
-                                returnFailure (failureResult))
+                            | Failure (label, err, pos) ->
+                                returnFailure (label, err, pos))
                     )
 
 let rec parseTerm (expParser) (variablesRef) = fun () ->
-    let res = [(fun () -> parseNumericTerm); 
+    if variables.Count > 0 then
+        let res = [(fun () -> parseNumericTerm); 
+                        (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
+                        (parseVariableTerm expParser variablesRef);
+                        (parseBracketedExpression expParser variablesRef)]
+                    |> lazyChoice
+        res()
+    else
+        let res = [(fun () -> parseNumericTerm); 
                     (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
-                    (parseVariableTerm expParser variablesRef);
-                    (parseBracketedExpression expParser variablesRef)]
-                |> lazyChoice
-    res()
+                    (parseBracketedExpression expParser variablesRef)
+                    ]
+                    |> lazyChoice
+        res()
+    
 
 type ShuntingYardStreamCandidateTypes =
     | MaybeOperator of Token option
@@ -229,15 +238,14 @@ let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (v
    let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated
    match parsedExpression with
    | Success (expReturnType, remainingString) ->
-        match remainingString.Trim().Length with
-        | 0 ->
+        if ((currentLine remainingString).[remainingString.position.column..] = "end of file") then
             match expReturnType with
             | ExpressionWithVariables (expr, varList) ->
-                ((EvaluateExpression (Some expr)), remainingString, Seq.ofList varList)
-        | _ ->
-            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing (sprintf "Could not parse the remaining string : %A" remainingString))) , "", Seq.ofList [])
-   | Failure failure ->
-        (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput "")) , "", Seq.ofList [])
+                ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
+        else
+            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing (sprintf "Could not parse the remaining : %A" remainingString))) , (currentLine remainingString), Seq.ofList [])
+   | Failure (label, err, pos) ->
+        (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput ("\n" + (generateResultText parsedExpression)))) , (pos.currentLine) , Seq.ofList [])
            
 
 let refractoredImplExamples = fun() ->
@@ -308,17 +316,23 @@ let refractoredImplExamples = fun() ->
 
     let developerDeliberatedNotHandledCases =
         [
-        "2 2"
+        "2 2";
         "2 + 2(4)"; //Not supported by existing Simpla expression parser
         "(1 + 2)(1 + 4)"; //Not supported by existing Simpla expression parser
         "asin 0"; //Existing Simpla expression parser returns -Infinity
         "2*-2"//Existing simpla expression parser supports this//If this has to be supported, then the expression "2*--2" would also be supported
         ]
 
+    let multiLineInputs =
+        [
+            "2 + 2\n" + "3 + 4"
+            "2 + 1\n +" + "3 + 2"
+        ]
+
     printfn "\n\n\nRefractoredImpl\n\n"
     let printParsedOutput inputString =
         printfn "Original Expression : %A" inputString
-        printfn "%A" (getParsedOutput inputString)
+        printfn "%A" (getParsedOutput inputString "someUniqueName")
 
     let mutable countOfFailed = 0
     let mutable countOfSuccess = 0
@@ -357,6 +371,7 @@ let refractoredImplExamples = fun() ->
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     printfn "Developer didn't handle it deliberately cases :"
     developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
+    multiLineInputs |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
 
     printfn "\nCustom cases : "
     let customCases = 

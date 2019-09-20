@@ -191,7 +191,7 @@ let parseQuotedString =
     |>> List.reduce (+)
     |>> fun a -> QuotedString a
 
-let parseSpaces = many (pChar ' ') <?> "whitespaces"
+let parseSpaces = (many ((pChar ' ') <|> (pChar '\n'))) <?> "whitespaces"
 let parseAToken = fun() ->
     if variables.Count > 0 then
         parseSpaces >>. (parseOpenBracket <|> parseCloseBracket <|> parseUnaryOp <|> parseArithmeticOp <|> parseDouble <|> parseQuotedString <|> (parseVariable()) <|> parseMasterVariable)
