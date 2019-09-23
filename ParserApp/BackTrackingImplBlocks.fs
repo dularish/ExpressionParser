@@ -76,3 +76,29 @@ let lazyChoiceWithoutBacktracking (listOfLazyParsers) =
     listOfLazyParsers
     |> List.reduce (fun x y ->
                         fun () -> lazyOrElseWithoutBacktracking x y)
+
+let rec parserZeroOrMoreWithoutBacktracking parser input =
+
+    let result1 = runOnInput parser input
+    match result1 with
+    | Failure (label, err, pos) ->
+        if(input.position.line <> pos.line || input.position.column <> pos.column) then
+            Failure (label, err, pos)
+        else
+            Success ([], input)
+    | Success (matched1, remainingInput1) ->
+        match parserZeroOrMoreWithoutBacktracking parser remainingInput1 with
+        | Success (subsequentValues, remainingInput2) ->
+            Success (matched1 :: subsequentValues, remainingInput2)
+        | Failure (label, err, pos) ->
+            if(input.position.line <> pos.line || input.position.column <> pos.column) then
+                Failure (label, err, pos)
+            else
+                Success ([], input)
+
+let manyWithoutBacktracking parser =
+    let label = (sprintf "many of %s" (getLabel parser))
+    let innerFn input = 
+        (parserZeroOrMoreWithoutBacktracking parser input)
+
+    {parseFn=innerFn; label = label}
