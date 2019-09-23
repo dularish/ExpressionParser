@@ -1,105 +1,10 @@
 ﻿module RefractoredImpl
 open MathematicalExpressionParser
 open ParserBuildingBlocks
+open BasicParsers
+open BasicParsersForMathExpParsing
+open BackTrackingModifiers
 open System
-
-type ExpressionEvaluationReturnType =
-    |ExpressionWithVariables of (Expression * string list)
-
-let lazyOrElse parser1 parser2 =
-    let label = sprintf "lazy OrElse"
-    let innerFn (input:InputState) =
-        if (String.length (currentLine input)) = 0 then
-            //Added to prevent stackOverflow//But in the long term prevent control getting here
-            Failure (label, "No more inputs", parserPositionFromInputState input)
-        else
-            let result1 = runOnInput (parser1()) input
-            match result1 with
-            | Success (matched1, remaining) ->
-                Success (matched1, remaining)
-            | Failure (errorLabel,err,pos) ->
-                let result2 = runOnInput (parser2()) input
-                match result2 with
-                | Success (matched2,remaining2) ->
-                    Success (matched2, remaining2)
-                | Failure (errorLabel2,err2,pos2) ->
-                    Failure (errorLabel2,err2,pos2)
-    {parseFn= innerFn;label=label}
-
-let (<^|^>) = lazyOrElse
-
-let lazyChoice (listOfLazyParsers) =
-    listOfLazyParsers
-    |> List.reduce (fun x y ->
-                        fun () -> lazyOrElse x y)
-
-
-let lazyAndThen parser1Wrapped parser2Wrapped =
-    let parser1 = parser1Wrapped() <?> "lazy AndThen firstOp"
-    parser1 >>= (fun p1Result ->
-    let parser2 = parser2Wrapped() <?> "lazy AndThen secondOp"
-    parser2 >>= (fun p2Result ->
-        returnP(p1Result, p2Result)))
-let (.^>>^.) = lazyAndThen
-let parseNumericTerm =
-    (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
-    |>> (fun (wholeNums, decimalPart) ->
-        let wholeNumsWithNegSignIfNeeded =
-            match wholeNums with
-            | Some _ , wholeNumsList ->
-                '-' :: wholeNumsList
-            | _ , wholeNumsList ->
-                wholeNumsList
-        match decimalPart with
-        | Some (decimalPoint, decimalPartDigits) ->
-            let doubleExp = String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
-                            |> double |> Expression.Constant
-            ExpressionWithVariables (doubleExp, [])
-        | None ->
-            let doubleExp = String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant
-            ExpressionWithVariables (doubleExp, []))
-    <?> "numeric term"
-
-let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
-    (between parseOpenBracket (parseSpaces >>. (expParser variablesRef)() .>> parseSpaces) parseCloseBracket)
-
-let unaryStrToUnaryOpUnion input =
-    if input = "exp" then ( (Exp))
-    elif input = "sin" then ( (Sin))
-    elif input = "cos" then ( (Cos))
-    elif input = "tan" then ((Tan))
-    elif input = "asin" then ((ASin))
-    elif input = "acos" then ((ACos))
-    elif input = "atan" then ((ATan))
-    elif input = "sinh" then ((Sinh))
-    elif input = "cosh" then ((Cosh))
-    elif input = "tanh" then ((Tanh))
-    elif input = "asinh" then ((ASinh))
-    elif input = "acosh" then ((ACosh))
-    elif input = "atanh" then ((ATanh))
-    elif input = "log" then ((Log))
-    elif input = "ln" then ((Ln))
-    elif input = "floor" then ((Floor))
-    elif input = "ceil" then ((Ceil))
-    elif input = "sqrt" then ((Sqrt))
-    else ((Abs))
-
-let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationReturnType>))= fun() ->
-    let parseUnaryOp = 
-        unaryOps
-        |> Seq.sortByDescending (fun x -> x.Length)
-        |> Seq.map (fun x -> pString x)
-        |> List.ofSeq
-        |> choice
-        |>> unaryStrToUnaryOpUnion
-    let expParsed = ((fun () -> (parseUnaryOp .>> parseSpaces)) .^>>^. termParser)
-    expParsed
-    |>> (fun (unaryOp, (ExpressionWithVariables (expr, varList))) -> ExpressionWithVariables ((UnaryExpression (unaryOp, expr)), varList) )
-    
-let returnFailure x = 
-    let innerFn input =
-        Failure (x)
-    {parseFn= innerFn; label ="returnFailure"}
 
 let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesReferenced:string list)= fun() ->
     let parseVariable =
@@ -130,15 +35,17 @@ let rec parseTerm (expParser) (variablesRef) = fun () ->
                         (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
                         (parseVariableTerm expParser variablesRef);
                         (parseBracketedExpression expParser variablesRef)]
-                    |> lazyChoice
+                    |> lazyChoiceWithoutBacktracking
         res()
+        <?>! "term"
     else
         let res = [(fun () -> parseNumericTerm); 
                     (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
                     (parseBracketedExpression expParser variablesRef)
                     ]
-                    |> lazyChoice
+                    |> lazyChoiceWithoutBacktracking
         res()
+        <?>! "term"
     
 
 type ShuntingYardStreamCandidateTypes =
@@ -224,11 +131,11 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
 
 
 let parseContinuousTerms expParser variablesRef= fun() ->
-    parseSpaces >>. ((parseTerm expParser variablesRef)() .>>. (many ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. (parseTerm expParser variablesRef)()))) .>> parseSpaces
+    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. ((parseTerm expParser variablesRef)() (*<?> "term after operator"*)))))
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression variablesRef= fun () ->
-     (parseContinuousTerms (parseExpression) variablesRef) <^|^> (parseBracketedExpression (parseExpression) variablesRef)
+     parseSpaces >>. ((parseContinuousTerms (parseExpression) variablesRef) <^|^>! (parseBracketedExpression (parseExpression) variablesRef)) .>> parseSpaces
 
 let getParsedOutput inputString (variableNameBeingEvaluated) =
     run ((parseExpression [variableNameBeingEvaluated])()) inputString
@@ -243,7 +150,7 @@ let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (v
             | ExpressionWithVariables (expr, varList) ->
                 ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
         else
-            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing (sprintf "Could not parse the remaining : %A" remainingString))) , (currentLine remainingString), Seq.ofList [])
+            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing ("\n" + (generateCustomErrorIndicator "Cannot parse beyond this point" (parserPositionFromInputState remainingString))))) , (currentLine remainingString), Seq.ofList [])
    | Failure (label, err, pos) ->
         (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput ("\n" + (generateResultText parsedExpression)))) , (pos.currentLine) , Seq.ofList [])
            

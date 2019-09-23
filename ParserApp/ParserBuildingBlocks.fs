@@ -160,7 +160,7 @@ let OrElse parser1 parser2 =
                 Failure (label, err, pos)
     {parseFn=innerFn; label=label}
 
-let (<|>) = OrElse        
+let (<|>) = OrElse
 
 let choice listOfParsers =
     List.reduce (<|>) listOfParsers
@@ -169,20 +169,6 @@ let anyOf listOfChars =
     listOfChars
     |> List.map pChar
     |> choice
-
-let digits = ['0'..'9']
-
-let lowercaseLetters = ['a'..'z']
-let uppercaseLetters = ['A'..'Z']                      
-
-let parseDigit = 
-    let predicate = Char.IsDigit
-    let label = "digit"
-    satisfy predicate label
-
-let parseLowerCaseLetter = (anyOf lowercaseLetters) <?> "Not a lowercase letter"
-let parseUpperCaseLetter = (anyOf uppercaseLetters) <?> "Not a uppercase letter"
-
 
 let bindP f parser =
     let label = "unknown"
@@ -215,6 +201,11 @@ let returnP x =
     let innerFn input =
         Success (x, input)
     {parseFn=innerFn; label="something Insignificant"}
+
+let returnFailure x = 
+    let innerFn input =
+        Failure (x)
+    {parseFn= innerFn; label ="returnFailure"}
 
 //Reimplemented using bind
 let mapP f =
@@ -263,18 +254,6 @@ let ( |>> ) x f = mapP f x
 
 let ( <*> ) = applyP
 
-let parseDigitAsInt = 
-    //(mapP parseDigit) |> int //This is also validfor the signature that was used for mapP
-    parseDigit |>> int
-
-let parseThreeDigitsAsStr = 
-    parseDigit .>>. parseDigit .>>. parseDigit
-    |>> (fun ((a,b), c) -> String [|a;b;c|])
-
-let parseThreeDigitsAsInt =
-    parseThreeDigitsAsStr
-    |>> int
-
 //Notice how two parameter function is lifted from normal world to parser world and two parameters in the parser world are passed to the function and combined
 let lift2 f xP yP = 
     (returnP f) <*> xP <*> yP
@@ -291,16 +270,6 @@ let rec sequence parsersList=
         returnP []
     | head :: tail -> 
         consP head (sequence tail)
-
-let charToList charList =
-    String(List.toArray charList)
-
-let pString str =
-    str
-    |> List.ofSeq
-    |> List.map pChar
-    |> sequence
-    |>> charToList
 
 //Notice that the output is simply a tuple and we will be reusing this function for many and many1
 let rec parserZeroOrMore parser input =
@@ -320,7 +289,7 @@ let many parser =
     let innerFn input = 
         Success (parserZeroOrMore parser input)
 
-    {parseFn=innerFn; label = label}    
+    {parseFn=innerFn; label = label}
 
 //This works but reimplemented using bind
 // let many1 parser = 
@@ -341,20 +310,10 @@ let many1 parser =
     many parser >>= (fun restResultList ->
         returnP (firstResult::restResultList)))
 
-let charListToInt charList= 
-    String(List.toArray charList) |> int       
-
-let pInt = 
-    many1 parseDigit
-    |>> charListToInt
-
 let opt p =
     let some = p |>> Some
     let none = returnP None
     some <|> none
-
-let pIntWithSign =
-    (opt (pChar '-')) .>>. pInt
 
 let sepBy1 parser sepParser =
     let sepThenParser = sepParser >>. parser
@@ -364,12 +323,6 @@ let sepBy1 parser sepParser =
 
 let sepBy parser sepParser =
     (sepBy1 parser sepParser) <|> (returnP [])
-
-let oneOrMoreDigits =
-    sepBy1 parseDigit (pChar ';')
-
-let zeroOrMoreDigits =
-    sepBy parseDigit (pChar ';')
 
 let generateResultText result =
     match result with
@@ -382,49 +335,12 @@ let generateResultText result =
         let failureCaret = sprintf "%*s^%s" colPos "" err
         sprintf "Line:%i Col:%i Error parsing %s\n%s\n%s" linePos colPos label errorLine failureCaret
 
+let generateCustomErrorIndicator errorMessage parserPos =
+    let errorLine = parserPos.currentLine
+    let colPos = parserPos.column
+    let linePos = parserPos.line
+    let failureCaret = sprintf "%*s^%s" colPos "" errorMessage
+    sprintf "Line:%i Col:%i \n%s\n%s" linePos colPos errorLine failureCaret
+
 let printResult result =
     printfn "%s" (generateResultText result)
-
-let examplesForTestingParserBuildingBlocks =
-    printfn "Testing a line"
-    let stringInput = "ABC"
-    let stringWithManyAs = "AAAABC"
-    let stringWithManyAsButNotWithFirstChar = "BAAAABC"
-    let numberInput = "123A"
-    let negativeNumber = "-123A"
-    let parseA = pChar 'A'
-    let result = run parseA stringInput
-    let parseB = pChar 'B'
-    let parseC = pChar 'C'
-    let parseAAndThenB = parseA .>>. parseB
-    let parseAOrparseB = parseA <|> parseB
-    let resultAB = run parseAAndThenB stringInput
-    let resultAOrB = run parseAOrparseB stringInput
-
-    let resultABWithoutA = (parseA >>. parseB |> run) stringInput
-    let resultABWithoutB = (parseA .>> parseB |> run) stringInput
-
-    let resultParseDigit = (parseDigitAsInt |> run) numberInput
-
-    let resultParseUpperCase = (parseUpperCaseLetter |> run ) stringInput
-
-    let parseAThenBThenC = parseA .>>. parseB .>>. parseC
-    let resultParseABC = (parseAThenBThenC |> run) stringInput
-
-    let resultParseThreeDigitsAsInt = (parseThreeDigitsAsInt |> run) numberInput
-
-    let resultParseABCSeq = ((sequence [parseA;parseB;parseC]) |> run ) stringInput
-
-    let resultParseABC = ((pString "ABC") |> run) stringInput
-
-    let resultForManyAs = ((many parseA) |> run) stringWithManyAs
-
-    let resultForMany1As = ((many1 parseA) |> run) stringWithManyAs
-
-    let resultForIntParsing = (pInt |> run) numberInput
-
-    let resultForIntWithNegParsing = (pIntWithSign |> run) negativeNumber
-
-    let resultForOneOrMoreInts = (oneOrMoreDigits |> run) "1;2;3;4;5;"
-
-    printfn "Run result : %A" resultForOneOrMoreInts

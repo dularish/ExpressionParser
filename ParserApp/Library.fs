@@ -4,8 +4,7 @@ open MathematicalExpressionParser
 [<EntryPoint>]
 let main argv =
     printfn "Hello world"
-    examplesForTestingParserBuildingBlocks
-    examplesForMathematicalExpressionParser
+    BasicParsers.examplesForTestingParserBuildingBlocks
     RefractoredImpl.refractoredImplExamples()
     System.Console.ReadKey() |> ignore
     0

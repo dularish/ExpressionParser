@@ -11,7 +11,7 @@
             <ColumnDefinition Width="1.75*" />
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
-        <DataGrid x:Name="_dataGridVariables" Grid.Column="0" CanUserAddRows="True" CanUserDeleteRows="True" ItemsSource="{Binding Variables}" AutoGenerateColumns="False" IsSynchronizedWithCurrentItem="True" >
+        <DataGrid x:Name="_dataGridVariables" Grid.Column="0" FontFamily="Consolas" CanUserAddRows="True" CanUserDeleteRows="True" ItemsSource="{Binding Variables}" AutoGenerateColumns="False" IsSynchronizedWithCurrentItem="True" >
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
