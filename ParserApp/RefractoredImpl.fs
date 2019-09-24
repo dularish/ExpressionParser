@@ -135,7 +135,7 @@ let parseContinuousTerms expParser variablesRef= fun() ->
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression variablesRef= fun () ->
-     parseSpaces >>. ((parseContinuousTerms (parseExpression) variablesRef) <^|^>! (parseBracketedExpression (parseExpression) variablesRef)) .>> parseSpaces
+     parseSpaces >>. ((parseContinuousTerms (parseExpression) variablesRef))() .>> parseSpaces
 
 let getParsedOutput inputString (variableNameBeingEvaluated) =
     run ((parseExpression [variableNameBeingEvaluated])()) inputString
