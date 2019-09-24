@@ -144,9 +144,6 @@ let parseUnaryOp =
     |>> unaryStrToUnion
     <?> "unary Op"
 
-let parseCloseBracket = pChar ')' |>> fun(_) -> Token.Bracket BracketClose
-let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
-
 let masterVariableNameToToken inputString =
     MasterKeywordVariable (inputString)
 
@@ -158,18 +155,6 @@ let parseMasterVariable =
     |> choice
     |>> masterVariableNameToToken
     <?> "master variable"
-
-let variableNameToToken inputString =
-    Variable (inputString)
-
-let parseVariable = fun() ->
-    variables.Keys
-    |> Seq.sortByDescending (fun x -> x.Length)
-    |> Seq.map (fun x -> pString x)
-    |> List.ofSeq
-    |> choice
-    |>> variableNameToToken
-    <?> "variable"
 
 type EntryType = 
     | Token of Token

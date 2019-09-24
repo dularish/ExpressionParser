@@ -1,6 +1,14 @@
 ﻿module BackTrackingModifiers
 open ParserBuildingBlocks
 
+//This module consists of only (eliminating) backtracking components
+    //We sometimes do not want backtracking to happen in the cases like "parseForStatement <|> parseIfStatement"
+        //In the above case, if "for" keyword is identified which means inputState is changed and not same as Initial condition, then the error message must be related to the 
+            //parsing of ForStatement, it is of no use to the user to see error messages like "\"If\" keyword not found" when the user intended to use for statement
+
+let isBackTrackingToBeOverrided = fun(inputState, failurePos) ->
+    (((currentLine inputState) <> failurePos.currentLine) || (inputState.position.line <> failurePos.line) || (inputState.position.column <> failurePos.column))
+
 let setLabelIfNoBacktracking parser newLabel =
     
     let newInnerFn input =
@@ -9,7 +17,7 @@ let setLabelIfNoBacktracking parser newLabel =
         | Success s ->
             Success s
         | Failure (oldLabel, err, pos) ->
-            if(input.position.line <> pos.line || input.position.column <> pos.column || ((currentLine input) <> pos.currentLine)) then
+            if(isBackTrackingToBeOverrided(input,pos)) then
                 Failure (oldLabel, err, pos)
             else
                 Failure(newLabel, err, pos)
@@ -26,7 +34,7 @@ let OrElseWithoutBacktracking parser1 parser2 =
         | Success (matched1, remaining) ->
             Success (matched1, remaining)
         | Failure (label,err,pos) ->
-            if(input.position.line <> pos.line || input.position.column <> pos.column || ((currentLine input) <> pos.currentLine)) then
+            if(isBackTrackingToBeOverrided(input,pos)) then
                 Failure (label, err, pos)
             else
                 let result2 = runOnInput parser2 input
@@ -55,7 +63,7 @@ let lazyOrElseWithoutBacktracking parser1 parser2 =
         | Success (matched1, remaining) ->
             Success (matched1, remaining)
         | Failure (errorLabel,err,pos) ->
-            if(input.position.line <> pos.line || input.position.column <> pos.column || ((currentLine input) <> pos.currentLine)) then
+            if(isBackTrackingToBeOverrided(input,pos)) then
                 Failure (errorLabel,err,pos)
             else
                 let result2 = runOnInput (parser2()) input
@@ -79,7 +87,7 @@ let rec parserZeroOrMoreWithoutBacktracking parser input =
     let result1 = runOnInput parser input
     match result1 with
     | Failure (label, err, pos) ->
-        if(input.position.line <> pos.line || input.position.column <> pos.column || ((currentLine input) <> pos.currentLine)) then
+        if(isBackTrackingToBeOverrided(input,pos)) then
             Failure (label, err, pos)
         else
             Success ([], input)
@@ -88,7 +96,7 @@ let rec parserZeroOrMoreWithoutBacktracking parser input =
         | Success (subsequentValues, remainingInput2) ->
             Success (matched1 :: subsequentValues, remainingInput2)
         | Failure (label, err, pos) ->
-            if(input.position.line <> pos.line || input.position.column <> pos.column || ((currentLine input) <> pos.currentLine)) then
+            if(isBackTrackingToBeOverrided(input,pos)) then
                 Failure (label, err, pos)
             else
                 Success ([], input)

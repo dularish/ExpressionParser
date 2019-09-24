@@ -30,22 +30,22 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
                     )
 
 let rec parseTerm (expParser) (variablesRef) = fun () ->
-    if variables.Count > 0 then
-        let res = [(fun () -> parseNumericTerm); 
-                        (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
-                        (parseVariableTerm expParser variablesRef);
-                        (parseBracketedExpression expParser variablesRef)]
-                    |> lazyChoiceWithoutBacktracking
-        res()
-        <?>! "term"
-    else
-        let res = [(fun () -> parseNumericTerm); 
-                    (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
-                    (parseBracketedExpression expParser variablesRef)
-                    ]
-                    |> lazyChoiceWithoutBacktracking
-        res()
-        <?>! "term"
+    let termPossibilities =
+        [
+            (fun () -> parseNumericTerm); 
+            (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
+            (parseBracketedExpression expParser variablesRef)
+        ]
+
+    let termOptions = 
+        if variables.Count > 0 then
+            termPossibilities @ [(parseVariableTerm expParser variablesRef)]
+        else
+            termPossibilities
+    let res =
+        termOptions |> lazyChoiceWithoutBacktracking
+    res()
+    <?>! "term"
     
 
 type ShuntingYardStreamCandidateTypes =
@@ -131,11 +131,11 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
 
 
 let parseContinuousTerms expParser variablesRef= fun() ->
-    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
+    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(spaces >>. parseArithmeticOp .>> spaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression variablesRef= fun () ->
-     parseSpaces >>. ((parseContinuousTerms (parseExpression) variablesRef))() .>> parseSpaces
+     spaces >>. ((parseContinuousTerms (parseExpression) variablesRef))() .>> spaces
 
 let getParsedOutput inputString (variableNameBeingEvaluated) =
     run ((parseExpression [variableNameBeingEvaluated])()) inputString

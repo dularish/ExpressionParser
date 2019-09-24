@@ -7,6 +7,9 @@ open MathematicalExpressionParser
 open BasicParsers
 open LazyParserBlocks
 
+let parseCloseBracket = pChar ')' |>> fun(_) -> Token.Bracket BracketClose
+let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
+
 let parseQuotedStringInnerValuesChoices =
     let alphabets =
         ['a'..'z'] @ ['A'..'Z']
@@ -20,8 +23,6 @@ let parseQuotedString =
     ((pChar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pChar '"'))
     |>> List.reduce (+)
     |>> fun a -> QuotedString a
-
-let parseSpaces = (many ((pChar ' ') <|> (pChar '\n'))) <?> "whitespaces"
 
 let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
@@ -43,7 +44,7 @@ let parseNumericTerm =
     <?> "numeric term"
 
 let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
-    (between parseOpenBracket (parseSpaces >>. (expParser variablesRef)() .>> parseSpaces) (parseCloseBracket <?> "matching closing paranthesis"))
+    (between parseOpenBracket (spaces >>. (expParser variablesRef)() .>> spaces) (parseCloseBracket <?> "matching closing paranthesis"))
 
 let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationReturnType>))= fun() ->
     let parseUnaryOp = 
@@ -53,6 +54,6 @@ let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationRet
         |> List.ofSeq
         |> choice
         |>> unaryStrToUnaryOpUnion
-    let expParsed = ((fun () -> (parseUnaryOp .>> parseSpaces)) .^>>^. termParser)
+    let expParsed = ((fun () -> (parseUnaryOp .>> spaces)) .^>>^. termParser)
     expParsed
     |>> (fun (unaryOp, (ExpressionWithVariables (expr, varList))) -> ExpressionWithVariables ((UnaryExpression (unaryOp, expr)), varList) )

@@ -26,6 +26,8 @@ let parseDigit =
 let parseLowerCaseLetter = (anyOf lowercaseLetters) <?> "Not a lowercase letter"
 let parseUpperCaseLetter = (anyOf uppercaseLetters) <?> "Not a uppercase letter"
 
+let spaces = (many ((pChar ' ') <|> (pChar '\n'))) <?> "whitespaces"
+
 let parseDigitAsInt = 
     //(mapP parseDigit) |> int //This is also validfor the signature that was used for mapP
     parseDigit |>> int
