@@ -131,7 +131,7 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
 
 
 let parseContinuousTerms expParser variablesRef= fun() ->
-    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. ((parseTerm expParser variablesRef)() (*<?> "term after operator"*)))))
+    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(parseSpaces >>. parseArithmeticOp .>> parseSpaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression variablesRef= fun () ->
