@@ -35,6 +35,7 @@ let rec parseTerm (expParser) (variablesRef) = fun () ->
             (fun () -> parseNumericTerm); 
             (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
             (parseBracketedExpression expParser variablesRef)
+            (fun () -> parseQuotedString)
         ]
 
     let termOptions = 

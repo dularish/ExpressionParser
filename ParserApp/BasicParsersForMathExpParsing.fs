@@ -14,15 +14,15 @@ let parseQuotedStringInnerValuesChoices =
     let alphabets =
         ['a'..'z'] @ ['A'..'Z']
         |> List.map (fun a -> a.ToString())
-    alphabets @ ["\\\""]
+    alphabets @ ["\\\""] @ [" "]
     |> List.map (fun s -> pString s)
     |> choice
-    <?> "quoted string"
 
 let parseQuotedString = 
     ((pChar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pChar '"'))
     |>> List.reduce (+)
-    |>> fun a -> QuotedString a
+    |>> fun a -> ExpressionWithVariables (StringExpression a, [])
+    <?> "quoted string"
 
 let parseNumericTerm =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
