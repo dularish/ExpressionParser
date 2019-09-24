@@ -5,21 +5,17 @@ open ParserBuildingBlocks
 let lazyOrElse parser1 parser2 =
     let label = sprintf "lazy OrElse"
     let innerFn (input:InputState) =
-        if (String.length (currentLine input)) = 0 then
-            //Added to prevent stackOverflow//But in the long term prevent control getting here
-            Failure (label, "Reached end of document", parserPositionFromInputState input)
-        else
-            let result1 = runOnInput (parser1()) input
-            match result1 with
-            | Success (matched1, remaining) ->
-                Success (matched1, remaining)
-            | Failure (errorLabel,err,pos) ->
-                let result2 = runOnInput (parser2()) input
-                match result2 with
-                | Success (matched2,remaining2) ->
-                    Success (matched2, remaining2)
-                | Failure (errorLabel2,err2,pos2) ->
-                    Failure (errorLabel2,err2,pos2)
+        let result1 = runOnInput (parser1()) input
+        match result1 with
+        | Success (matched1, remaining) ->
+            Success (matched1, remaining)
+        | Failure (errorLabel,err,pos) ->
+            let result2 = runOnInput (parser2()) input
+            match result2 with
+            | Success (matched2,remaining2) ->
+                Success (matched2, remaining2)
+            | Failure (errorLabel2,err2,pos2) ->
+                Failure (errorLabel2,err2,pos2)
     {parseFn= innerFn;label=label}
 
 let (<^|^>) = lazyOrElse
