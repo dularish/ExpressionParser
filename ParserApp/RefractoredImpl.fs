@@ -17,7 +17,7 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
     >>= (fun s ->
                 let variableExpr = variables.[s]
                 if (variablesReferenced |> List.contains s) then
-                    returnFailure ("variable",(sprintf "Circular referencing of variable %s" s), ({column=0;line= 0; currentLine = variableExpr}))//To be changed in the future
+                    returnFailure ("variable",(sprintf "Circular referencing of variable %s" s), ({column=0;line=0; currentLine = variableExpr}))//To be changed in the future
                 else
                     let newVariablesRef = s :: variablesReferenced
                     run ((expParser (newVariablesRef))()) variableExpr
@@ -26,7 +26,7 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
                             | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _) ->
                                 returnP (ExpressionWithVariables(expressionParsed, [s]))
                             | Failure (label, err, pos) ->
-                                returnFailure (label, err, pos))
+                                returnFailure (s, err, pos))
                     )
 
 let rec parseTerm (expParser) (variablesRef) = fun () ->
