@@ -21,6 +21,14 @@ type BinaryOperator =
     | Multiply
     | Pow
     | Modulo
+    | EqualTo
+    | NotEqualTo
+    | GreaterThanOrEqualTo
+    | LessThanOrEqualTo
+    | GreaterThan
+    | LessThan
+    | LogicalAnd
+    | LogicalOr
 
 type UnaryOperator = 
     | Exp
@@ -42,6 +50,13 @@ type UnaryOperator =
     | Ceil
     | Sqrt
     | Abs
+    | Not
+    | Mean
+    | Min
+    | Max
+    | Sd
+    | Sum
+    | SumSquared
 
 type Operator =
     | BinaryOperator of BinaryOperator
@@ -56,6 +71,7 @@ type Expression =
     | BinaryExpression of Expression*BinaryOperator*Expression
     | UnaryExpression of UnaryOperator * Expression
     | StringExpression of string
+    | NumArray of (double list)
 
 type ExpressionEvaluationReturnType =
     |ExpressionWithVariables of (Expression * string list)
@@ -73,40 +89,27 @@ type StableToken =
     | Operator of BinaryOperator
     | Expression of Expression
 
-let arithmeticOps = 
-        ['+';'-';'/';'*';'^';'%']
+let binaryOps = 
+        ["+";"-";"/";"*";"^";"%";"==";"!=";">=";"<=";">";"<";"&&";"||"]
 
 let unaryOps =
-    ["exp";"sin";"cos";"tan";"acos";"asin";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"log";"ln";"floor";"ceil";"sqrt";"abs"]
+    ["exp";"sin";"cos";"tan";"acos";"asin";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"log";"ln";"floor";"ceil";"sqrt";"abs";"!";"mean";"min";"max";"sd";"sum";"sumsquared"]
 
 let arithmeticCharToUnion input =
-    if input = '+' then (BinaryOperator (Plus))
-    elif input = '-' then (BinaryOperator (Minus))
-    elif input = '*' then (BinaryOperator (Multiply))
-    elif input = '^' then (BinaryOperator (Pow))
-    elif input = '%' then (BinaryOperator (Modulo))
-    else (BinaryOperator (Divide))
-
-let unaryStrToUnion input =
-    if input = "exp" then (UnaryOperator (Exp))
-    elif input = "sin" then (UnaryOperator (Sin))
-    elif input = "cos" then (UnaryOperator (Cos))
-    elif input = "tan" then (UnaryOperator (Tan))
-    elif input = "asin" then (UnaryOperator (ASin))
-    elif input = "acos" then (UnaryOperator (ACos))
-    elif input = "atan" then (UnaryOperator (ATan))
-    elif input = "sinh" then (UnaryOperator (Sinh))
-    elif input = "cosh" then (UnaryOperator (Cosh))
-    elif input = "tanh" then (UnaryOperator (Tanh))
-    elif input = "asinh" then (UnaryOperator (ASinh))
-    elif input = "acosh" then (UnaryOperator (ACosh))
-    elif input = "atanh" then (UnaryOperator (ATanh))
-    elif input = "log" then (UnaryOperator (Log))
-    elif input = "ln" then (UnaryOperator (Ln))
-    elif input = "floor" then (UnaryOperator (Floor))
-    elif input = "ceil" then (UnaryOperator (Ceil))
-    elif input = "sqrt" then (UnaryOperator (Sqrt))
-    else (UnaryOperator (Abs))
+    if input = "+" then (BinaryOperator (Plus))
+    elif input = "-" then (BinaryOperator (Minus))
+    elif input = "*" then (BinaryOperator (Multiply))
+    elif input = "^" then (BinaryOperator (Pow))
+    elif input = "%" then (BinaryOperator (Modulo))
+    elif input = "/" then (BinaryOperator (Divide))
+    elif input = "==" then (BinaryOperator (EqualTo))
+    elif input = "!=" then (BinaryOperator (NotEqualTo))
+    elif input = ">=" then (BinaryOperator (GreaterThanOrEqualTo))
+    elif input = "<=" then (BinaryOperator (LessThanOrEqualTo))
+    elif input = ">" then (BinaryOperator (GreaterThan))
+    elif input = "<" then (BinaryOperator (LessThan))
+    elif input = "&&" then (BinaryOperator (LogicalAnd))
+    else (BinaryOperator (LogicalOr))
 
 let unaryStrToUnaryOpUnion input =
     if input = "exp" then ( (Exp))
@@ -127,22 +130,21 @@ let unaryStrToUnaryOpUnion input =
     elif input = "floor" then ((Floor))
     elif input = "ceil" then ((Ceil))
     elif input = "sqrt" then ((Sqrt))
-    else ((Abs))
+    elif input = "abs" then ((Abs))
+    elif input = "sum" then ((Sum))
+    elif input = "sumsquared" then ((SumSquared))
+    elif input = "mean" then ((Mean))
+    elif input = "min" then ((Min))
+    elif input = "max" then ((Max))
+    elif input = "sd" then ((Sd))
+    else ((Not))
 
 let parseArithmeticOp =
-    arithmeticOps
-    |> anyOf
+    binaryOps
+    |> List.map (fun x -> pString x)
+    |> choice
     |>> arithmeticCharToUnion
     <?> "arithmetic operator"
-
-let parseUnaryOp =
-    unaryOps
-    |> Seq.sortByDescending (fun x -> x.Length)
-    |> Seq.map (fun x -> pString x)
-    |> List.ofSeq
-    |> choice
-    |>> unaryStrToUnion
-    <?> "unary Op"
 
 let masterVariableNameToToken inputString =
     MasterKeywordVariable (inputString)
@@ -162,12 +164,20 @@ type EntryType =
 
 let getPriority operator =
     match operator with
-    | Plus -> 1
-    | Minus -> 1
-    | Multiply -> 2
-    | Divide -> 2
-    | Modulo -> 2
-    | Pow -> 3
+    | LogicalAnd -> 1
+    | LogicalOr -> 1
+    | EqualTo -> 2
+    | NotEqualTo -> 2
+    | GreaterThan -> 2
+    | GreaterThanOrEqualTo -> 2
+    | LessThan -> 2
+    | LessThanOrEqualTo -> 2
+    | Plus -> 3
+    | Minus -> 3
+    | Multiply -> 4
+    | Divide -> 4
+    | Modulo -> 4
+    | Pow -> 5
 
 type Associativity =
     | Left
@@ -214,19 +224,28 @@ type ExpressionEvaluationError =
     | DivideByZeroAttempted of string
     | UnBalancedParanthesis of string
     | ParsingError of MathExpressionParsingFailureType
+    | ArrayTypeNotSupportedAsReturnType of string
 
 type AllowedEvaluationResultTypes =
     | Double of double
     | String of string
+    | NumericArray of (double list)
 
 let getStringValueOfEvaluationResultType (evaluationResultTypeValue) =
     match evaluationResultTypeValue with
     | Double x -> x.ToString()
     | String x -> x
+    | NumericArray x -> x.ToString()
 
 type ExpressionEvaluationResult =
     | EvaluationSuccess of AllowedEvaluationResultTypes
     | EvaluationFailure of ExpressionEvaluationError
+
+let doubleToBool x =
+    x = 1.
+
+let boolToDouble x =
+    if x = true then (1.) else (0.)
 
 let computeBinaryExpression (operand1:AllowedEvaluationResultTypes) operator (operand2:AllowedEvaluationResultTypes) =
     match (operand1, operand2) with
@@ -247,6 +266,26 @@ let computeBinaryExpression (operand1:AllowedEvaluationResultTypes) operator (op
                 EvaluationFailure (DivideByZeroAttempted ("Expression tried to evaluate : " + operand1DoubleValue.ToString() + operator.ToString() + operand2DoubleValue.ToString()))
             else
                 EvaluationSuccess (Double (operand1DoubleValue / operand2DoubleValue))
+        | LogicalAnd ->
+            let operand1BoolValue = doubleToBool operand1DoubleValue
+            let operand2BoolValue = doubleToBool operand2DoubleValue
+            EvaluationSuccess (Double (boolToDouble (operand1BoolValue && operand2BoolValue)))
+        | LogicalOr ->
+            let operand1BoolValue = doubleToBool operand1DoubleValue
+            let operand2BoolValue = doubleToBool operand2DoubleValue
+            EvaluationSuccess (Double (boolToDouble (operand1BoolValue || operand2BoolValue)))
+        |LessThan ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue < operand2DoubleValue)))
+        | LessThanOrEqualTo ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue <= operand2DoubleValue)))
+        | GreaterThan ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue > operand2DoubleValue)))
+        | GreaterThanOrEqualTo ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue >= operand2DoubleValue)))
+        | EqualTo ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue = operand2DoubleValue)))
+        | NotEqualTo ->
+            EvaluationSuccess (Double (boolToDouble (operand1DoubleValue <> operand2DoubleValue)))
     | (Double _, String _)
     | (String _, Double _)
     | (String _, String _) ->
@@ -255,6 +294,10 @@ let computeBinaryExpression (operand1:AllowedEvaluationResultTypes) operator (op
             EvaluationSuccess (String (getStringValueOfEvaluationResultType(operand1) + getStringValueOfEvaluationResultType(operand2)))
         | _ ->
            EvaluationFailure (InvalidOperatorUse (sprintf "Operator %A cannot be used with String types" operator)) 
+    | (NumericArray _ , _)
+    | (_, NumericArray _)
+    | (NumericArray _, NumericArray _) ->
+        EvaluationFailure (InvalidOperatorUse (sprintf "Numeric array types cannot be used with binary operator"))
 
 let computeUnaryExpression operator (operand1:AllowedEvaluationResultTypes) =
     match operand1 with
@@ -300,6 +343,31 @@ let computeUnaryExpression operator (operand1:AllowedEvaluationResultTypes) =
             EvaluationSuccess (Double (Math.Sqrt(operand1DoubleValue)))
         | Abs ->
             EvaluationSuccess (Double (Math.Abs(operand1DoubleValue)))
+        | Not ->
+            EvaluationSuccess (Double (boolToDouble(not (doubleToBool (operand1DoubleValue)))))
+        | x ->
+            EvaluationFailure (InvalidOperatorUse (sprintf "Unary Operator %A cannot be used with Double types" x))
+    | (NumericArray numericArray) ->
+        match operator with
+        | Mean ->
+            EvaluationSuccess (Double (List.average numericArray))
+        | Min ->
+            EvaluationSuccess (Double (List.min numericArray))
+        | Max ->
+            EvaluationSuccess (Double (List.max numericArray))
+        | Sum ->
+            EvaluationSuccess (Double (List.sum numericArray))
+        | SumSquared ->
+            EvaluationSuccess (Double (numericArray |> List.map (fun x -> x * x) |> List.sum))
+        | Sd ->
+            let n = double numericArray.Length
+            let mean = numericArray |> List.average
+            let sumOfSquaresOfDiff = numericArray |> List.map (fun x -> Math.Pow(x - mean,2.)) |> List.sum
+            let variance = sumOfSquaresOfDiff / n
+            let sd = Math.Sqrt variance
+            EvaluationSuccess(Double (sd))
+        | x ->
+            EvaluationFailure (InvalidOperatorUse (sprintf "Unary Operator %A cannot be used with Array types" x))
 
 let rec EvaluateExpression (exp: Expression option) =
     match exp with
@@ -326,5 +394,7 @@ let rec EvaluateExpression (exp: Expression option) =
                 computeUnaryExpression unaryOp expDbl
             | EvaluationFailure failure ->
                 EvaluationFailure failure
+        | NumArray x ->
+            EvaluationSuccess (NumericArray x)
     | None ->
         EvaluationFailure (UnRecognizedToken "Null expression - Not expected")

@@ -33,6 +33,8 @@ let rec parseTerm (expParser) (variablesRef) = fun () ->
     let termPossibilities =
         [
             (fun () -> parseNumericTerm); 
+            (fun () -> parseNumArray);
+            (fun () -> parseBoolStringAsDouble);
             (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
             (parseBracketedExpression expParser variablesRef)
             (fun () -> parseQuotedString)
@@ -148,6 +150,8 @@ let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (v
    | Success (expReturnType, remainingString) ->
         if ((currentLine remainingString).[remainingString.position.column..] = "end of file") then
             match expReturnType with
+            | ExpressionWithVariables (Expression.NumArray numarray, varList) ->
+                (EvaluationFailure (ArrayTypeNotSupportedAsReturnType "Expression returns Numeric Array type which is not a supported return type"), (currentLine remainingString), Seq.ofList [])
             | ExpressionWithVariables (expr, varList) ->
                 ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
         else

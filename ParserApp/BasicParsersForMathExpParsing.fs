@@ -24,7 +24,7 @@ let parseQuotedString =
     |>> fun a -> ExpressionWithVariables (StringExpression a, [])
     <?> "quoted string"
 
-let parseNumericTerm =
+let parseDoubleNum =
     (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
         let wholeNumsWithNegSignIfNeeded =
@@ -36,12 +36,27 @@ let parseNumericTerm =
         match decimalPart with
         | Some (decimalPoint, decimalPartDigits) ->
             let doubleExp = System.String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
-                            |> double |> Expression.Constant
-            ExpressionWithVariables (doubleExp, [])
+                            |> double
+            doubleExp
         | None ->
-            let doubleExp = System.String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double |> Expression.Constant
-            ExpressionWithVariables (doubleExp, []))
+            let doubleExp = System.String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double
+            doubleExp)
+
+let parseNumericTerm =
+    parseDoubleNum
+    |>> (fun doubleNum -> ExpressionWithVariables (Expression.Constant doubleNum, []))
     <?> "numeric term"
+
+let parseNumArray =
+    pChar '[' .>> spaces >>. parseDoubleNum .>>. (many (spaces >>. pChar ',' >>. spaces >>. parseDoubleNum)) .>> pChar ']'
+    |>> (fun (head, tail) -> ExpressionWithVariables (Expression.NumArray (head::tail), []))
+    <?> "num array"
+
+let parseBoolStringAsDouble =
+    ((pString "true") <|> (pString "false"))
+    |>> (fun s -> 
+                let doubleNum = if s = "true" then 1. else 0.
+                ExpressionWithVariables (Expression.Constant doubleNum, []))
 
 let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
     (between parseOpenBracket (spaces >>. (expParser variablesRef)() .>> spaces) (parseCloseBracket <?> "matching closing paranthesis"))
