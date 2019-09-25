@@ -10,7 +10,7 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
     let parseVariable =
         variables.Keys
         |> Seq.sortByDescending (fun x -> x.Length)
-        |> Seq.map (fun x -> pString x)
+        |> Seq.map (fun x -> pstring x)
         |> List.ofSeq
         |> choice
     parseVariable

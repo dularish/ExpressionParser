@@ -15,7 +15,7 @@ let parseQuotedStringInnerValuesChoices =
         ['a'..'z'] @ ['A'..'Z']
         |> List.map (fun a -> a.ToString())
     alphabets @ ["\\\""] @ [" "]
-    |> List.map (fun s -> pString s)
+    |> List.map (fun s -> pstring s)
     |> choice
 
 let parseQuotedString = 
@@ -53,7 +53,7 @@ let parseNumArray =
     <?> "num array"
 
 let parseBoolStringAsDouble =
-    ((pString "true") <|> (pString "false"))
+    ((pstring "true") <|> (pstring "false"))
     |>> (fun s -> 
                 let doubleNum = if s = "true" then 1. else 0.
                 ExpressionWithVariables (Expression.Constant doubleNum, []))
@@ -65,7 +65,7 @@ let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationRet
     let parseUnaryOp = 
         unaryOps
         |> Seq.sortByDescending (fun x -> x.Length)
-        |> Seq.map (fun x -> pString x)
+        |> Seq.map (fun x -> pstring x)
         |> List.ofSeq
         |> choice
         |>> unaryStrToUnaryOpUnion

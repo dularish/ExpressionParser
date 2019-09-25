@@ -11,7 +11,7 @@ let uppercaseLetters = ['A'..'Z']
 let charToList charList =
     String(List.toArray charList)
 
-let pString str =
+let pstring str =
     str
     |> List.ofSeq
     |> List.map pchar
@@ -87,7 +87,7 @@ let examplesForTestingParserBuildingBlocks =
 
     let resultParseABCSeq = ((sequence [parseA;parseB;parseC]) |> run ) stringInput
 
-    let resultParseABC = ((pString "ABC") |> run) stringInput
+    let resultParseABC = ((pstring "ABC") |> run) stringInput
 
     let resultForManyAs = ((many parseA) |> run) stringWithManyAs
 

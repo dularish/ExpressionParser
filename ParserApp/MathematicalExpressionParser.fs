@@ -141,7 +141,7 @@ let unaryStrToUnaryOpUnion input =
 
 let parseArithmeticOp =
     binaryOps
-    |> List.map (fun x -> pString x)
+    |> List.map (fun x -> pstring x)
     |> choice
     |>> arithmeticCharToUnion
     <?> "arithmetic operator"
@@ -152,7 +152,7 @@ let masterVariableNameToToken inputString =
 let parseMasterVariable =
     masterVariables.Keys
     |> Seq.sortByDescending (fun x -> x.Length)
-    |> Seq.map (fun x -> pString x)
+    |> Seq.map (fun x -> pstring x)
     |> List.ofSeq
     |> choice
     |>> masterVariableNameToToken
