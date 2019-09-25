@@ -148,7 +148,7 @@ let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (v
    let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated
    match parsedExpression with
    | Success (expReturnType, remainingString) ->
-        if ((currentLine remainingString).[remainingString.position.column..] = "end of file") then
+        if ((currentLine remainingString).[remainingString.position.column..] = eofString) then
             match expReturnType with
             | ExpressionWithVariables (Expression.NumArray numarray, varList) ->
                 (EvaluationFailure (ArrayTypeNotSupportedAsReturnType "Expression returns Numeric Array type which is not a supported return type"), (currentLine remainingString), Seq.ofList [])

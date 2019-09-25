@@ -18,7 +18,7 @@ let pstring str =
     |> sequence
     |>> charToList
 
-let parseDigit = 
+let digit = 
     let predicate = Char.IsDigit
     let label = "digit"
     satisfy predicate label
@@ -30,10 +30,10 @@ let spaces = (many ((pchar ' ') <|> (pchar '\n'))) <?> "whitespaces"
 
 let parseDigitAsInt = 
     //(mapP parseDigit) |> int //This is also validfor the signature that was used for mapP
-    parseDigit |>> int
+    digit |>> int
 
 let parseThreeDigitsAsStr = 
-    parseDigit .>>. parseDigit .>>. parseDigit
+    digit .>>. digit .>>. digit
     |>> (fun ((a,b), c) -> String [|a;b;c|])
 
 let parseThreeDigitsAsInt =
@@ -44,17 +44,17 @@ let charListToInt charList=
     String(List.toArray charList) |> int       
 
 let pInt = 
-    many1 parseDigit
+    many1 digit
     |>> charListToInt
 
 let pIntWithSign =
     (opt (pchar '-')) .>>. pInt
 
 let oneOrMoreDigits =
-    sepBy1 parseDigit (pchar ';')
+    sepBy1 digit (pchar ';')
 
 let zeroOrMoreDigits =
-    sepBy parseDigit (pchar ';')
+    sepBy digit (pchar ';')
 
 
 let examplesForTestingParserBuildingBlocks =

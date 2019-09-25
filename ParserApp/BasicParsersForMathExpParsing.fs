@@ -25,7 +25,7 @@ let parseQuotedString =
     <?> "quoted string"
 
 let parseDoubleNum =
-    (opt (pchar '-')) .>>. (many1 parseDigit) .>>. (opt ((pchar '.') .>>. (many1 parseDigit) ))
+    (opt (pchar '-')) .>>. (many1 digit) .>>. (opt ((pchar '.') .>>. (many1 digit) ))
     |>> (fun (wholeNums, decimalPart) ->
         let wholeNumsWithNegSignIfNeeded =
             match wholeNums with
@@ -59,7 +59,7 @@ let parseBoolStringAsDouble =
                 ExpressionWithVariables (Expression.Constant doubleNum, []))
 
 let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
-    (between parseOpenBracket (spaces >>. (expParser variablesRef)() .>> spaces) (parseCloseBracket <?> "matching closing paranthesis"))
+    (between parseOpenBracket (parseCloseBracket <?> "matching closing paranthesis") (spaces >>. (expParser variablesRef)() .>> spaces))
 
 let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationReturnType>))= fun() ->
     let parseUnaryOp = 

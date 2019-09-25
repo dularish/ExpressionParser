@@ -6,6 +6,8 @@ open System.Globalization
 type ParserLabel = string
 type ParserError = string
 
+let eofString = "end of file"
+
 type ParserPosition = {
     currentLine: string
     line: int
@@ -25,7 +27,7 @@ let currentLine inputState =
     if linePos < inputState.lines.Length then
         inputState.lines.[linePos]
     else
-        "end of file"
+        eofString
 
 let parserPositionFromInputState (inputState:InputState) = {
     currentLine = currentLine inputState
@@ -241,7 +243,7 @@ let ignoreRight parser1 parser2 =
 let (.>>) = ignoreRight    
 
 let between p1 p2 p3 =
-    p1 >>. p2 .>> p3
+    p1 >>. p3 .>> p2
 
 //We want to put the mapping function after we get the desired parser
 let ( |>> ) x f = mapP f x
