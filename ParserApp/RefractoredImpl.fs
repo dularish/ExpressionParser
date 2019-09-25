@@ -1,9 +1,8 @@
 ﻿module RefractoredImpl
 open MathematicalExpressionParser
-open ParserBuildingBlocks
-open BasicParsers
+open FParsec
 open BasicParsersForMathExpParsing
-open BackTrackingModifiers
+open LazyParserBlocks
 open System
 
 let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesReferenced:string list)= fun() ->
@@ -17,17 +16,17 @@ let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvalua
     >>= (fun s ->
                 let variableExpr = variables.[s]
                 if (variablesReferenced |> List.contains s) then
-                    returnFailure ("expression for " + s,(sprintf "Circular referencing of variable %s" s), ({column=0;line=0; currentLine = variableExpr + "<- VariableString"}))//Changing the currentLine so as to override the error messages
+                    fail (sprintf "Circular referencing of variable %s" s)
                 else
                     let newVariablesRef = s :: variablesReferenced
                     run ((expParser (newVariablesRef))()) variableExpr
                     |> (fun x ->
                             match x with
-                            | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _) ->
-                                returnP (ExpressionWithVariables(expressionParsed, [s]))
+                            | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _, _) ->
+                                preturn (ExpressionWithVariables(expressionParsed, [s]))
                             | Failure (label, err, pos) ->
-                                returnFailure (s, err, pos))
-                    )
+                                fail (sprintf "Error in evaluating the expression for the variable %s" s)
+                    ))
 
 let rec parseTerm (expParser) (variablesRef) = fun () ->
     let termPossibilities =
@@ -46,9 +45,9 @@ let rec parseTerm (expParser) (variablesRef) = fun () ->
         else
             termPossibilities
     let res =
-        termOptions |> lazyChoiceWithoutBacktracking
+        termOptions |> lazyChoice
     res()
-    <?>! "term"
+    <?> "term"
     
 
 type ShuntingYardStreamCandidateTypes =
@@ -134,30 +133,27 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
 
 
 let parseContinuousTerms expParser variablesRef= fun() ->
-    ((parseTerm expParser variablesRef)() .>>. (manyWithoutBacktracking ((opt(spaces >>. parseArithmeticOp .>> spaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
+    ((parseTerm expParser variablesRef)() .>>. (many ((opt(spaces >>? parseArithmeticOp .>> spaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
     |>> convertContinuousTermsToSingleExpression
 
 let rec parseExpression variablesRef= fun () ->
      spaces >>. ((parseContinuousTerms (parseExpression) variablesRef))() .>> spaces
 
 let getParsedOutput inputString (variableNameBeingEvaluated) =
-    run ((parseExpression [variableNameBeingEvaluated])()) inputString
+    run ((parseExpression [variableNameBeingEvaluated])() .>> eof) inputString
 
 let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (variableNameBeingEvaluated) =
    variables <- variablesDict
    let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated
    match parsedExpression with
-   | Success (expReturnType, remainingString) ->
-        if ((currentLine remainingString).[remainingString.position.column..] = eofString) then
-            match expReturnType with
-            | ExpressionWithVariables (Expression.NumArray numarray, varList) ->
-                (EvaluationFailure (ArrayTypeNotSupportedAsReturnType "Expression returns Numeric Array type which is not a supported return type"), (currentLine remainingString), Seq.ofList [])
-            | ExpressionWithVariables (expr, varList) ->
-                ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
-        else
-            (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.IncompleteParsing ("\n" + (generateCustomErrorIndicator "Cannot parse beyond this point" (parserPositionFromInputState remainingString))))) , (currentLine remainingString), Seq.ofList [])
+   | Success (expReturnType, remainingString, pos) ->
+        match expReturnType with
+        | ExpressionWithVariables (Expression.NumArray numarray, varList) ->
+            (EvaluationFailure (ArrayTypeNotSupportedAsReturnType "Expression returns Numeric Array type which is not a supported return type"), (""), Seq.ofList [])
+        | ExpressionWithVariables (expr, varList) ->
+            ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
    | Failure (label, err, pos) ->
-        (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput ("\n" + (generateResultText parsedExpression)))) , (pos.currentLine) , Seq.ofList [])
+        (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput ("\n" + label))) , err.ToString() , Seq.ofList [])
            
 
 let refractoredImplExamples = fun() ->

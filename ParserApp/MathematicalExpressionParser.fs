@@ -1,8 +1,10 @@
 ﻿module MathematicalExpressionParser
 open System
-open ParserBuildingBlocks
-open BasicParsers
+open FParsec
 open System.Collections.Generic
+
+type UserState = unit
+type Parser<'a> = Parser<'a, UserState>
 
 let mutable variables = dict [
                 "variableA", "1";
@@ -139,7 +141,7 @@ let unaryStrToUnaryOpUnion input =
     elif input = "sd" then ((Sd))
     else ((Not))
 
-let parseArithmeticOp =
+let parseArithmeticOp: Parser<_> =
     binaryOps
     |> List.map (fun x -> pstring x)
     |> choice
@@ -149,7 +151,7 @@ let parseArithmeticOp =
 let masterVariableNameToToken inputString =
     MasterKeywordVariable (inputString)
 
-let parseMasterVariable =
+let parseMasterVariable: Parser<_> =
     masterVariables.Keys
     |> Seq.sortByDescending (fun x -> x.Length)
     |> Seq.map (fun x -> pstring x)

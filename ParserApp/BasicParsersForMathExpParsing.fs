@@ -2,15 +2,14 @@
 
 open System
 open System.Collections.Generic
-open ParserBuildingBlocks
+open FParsec
 open MathematicalExpressionParser
-open BasicParsers
 open LazyParserBlocks
 
 let parseCloseBracket = pchar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
-let parseQuotedStringInnerValuesChoices =
+let parseQuotedStringInnerValuesChoices: Parser<_> =
     let alphabets =
         ['a'..'z'] @ ['A'..'Z']
         |> List.map (fun a -> a.ToString())
@@ -24,7 +23,7 @@ let parseQuotedString =
     |>> fun a -> ExpressionWithVariables (StringExpression a, [])
     <?> "quoted string"
 
-let parseDoubleNum =
+let parseDoubleNum: Parser<_> =
     (opt (pchar '-')) .>>. (many1 digit) .>>. (opt ((pchar '.') .>>. (many1 digit) ))
     |>> (fun (wholeNums, decimalPart) ->
         let wholeNumsWithNegSignIfNeeded =
@@ -52,7 +51,7 @@ let parseNumArray =
     |>> (fun (head, tail) -> ExpressionWithVariables (Expression.NumArray (head::tail), []))
     <?> "num array"
 
-let parseBoolStringAsDouble =
+let parseBoolStringAsDouble: Parser<_> =
     ((pstring "true") <|> (pstring "false"))
     |>> (fun s -> 
                 let doubleNum = if s = "true" then 1. else 0.
