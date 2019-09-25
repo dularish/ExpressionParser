@@ -52,7 +52,7 @@ let choiceWithoutBacktracking listOfParsers =
 
 let anyOfWithoutBacktracking listOfChars =
     listOfChars
-    |> List.map pChar
+    |> List.map pchar
     |> choiceWithoutBacktracking
 
 let lazyOrElseWithoutBacktracking parser1 parser2 =

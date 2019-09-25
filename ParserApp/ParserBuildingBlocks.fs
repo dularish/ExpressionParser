@@ -113,7 +113,7 @@ let satisfy predicate label =
             Failure (label, err, pos)
     {parseFn = innerFn; label = label}
 
-let pChar charToMatch =
+let pchar charToMatch =
     let predicate ch = (ch = charToMatch)
     let label = sprintf "%c" charToMatch
     satisfy predicate label
@@ -167,7 +167,7 @@ let choice listOfParsers =
 
 let anyOf listOfChars =
     listOfChars
-    |> List.map pChar
+    |> List.map pchar
     |> choice
 
 let bindP f parser =

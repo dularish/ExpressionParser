@@ -14,7 +14,7 @@ let charToList charList =
 let pString str =
     str
     |> List.ofSeq
-    |> List.map pChar
+    |> List.map pchar
     |> sequence
     |>> charToList
 
@@ -26,7 +26,7 @@ let parseDigit =
 let parseLowerCaseLetter = (anyOf lowercaseLetters) <?> "Not a lowercase letter"
 let parseUpperCaseLetter = (anyOf uppercaseLetters) <?> "Not a uppercase letter"
 
-let spaces = (many ((pChar ' ') <|> (pChar '\n'))) <?> "whitespaces"
+let spaces = (many ((pchar ' ') <|> (pchar '\n'))) <?> "whitespaces"
 
 let parseDigitAsInt = 
     //(mapP parseDigit) |> int //This is also validfor the signature that was used for mapP
@@ -48,13 +48,13 @@ let pInt =
     |>> charListToInt
 
 let pIntWithSign =
-    (opt (pChar '-')) .>>. pInt
+    (opt (pchar '-')) .>>. pInt
 
 let oneOrMoreDigits =
-    sepBy1 parseDigit (pChar ';')
+    sepBy1 parseDigit (pchar ';')
 
 let zeroOrMoreDigits =
-    sepBy parseDigit (pChar ';')
+    sepBy parseDigit (pchar ';')
 
 
 let examplesForTestingParserBuildingBlocks =
@@ -64,10 +64,10 @@ let examplesForTestingParserBuildingBlocks =
     let stringWithManyAsButNotWithFirstChar = "BAAAABC"
     let numberInput = "123A"
     let negativeNumber = "-123A"
-    let parseA = pChar 'A'
+    let parseA = pchar 'A'
     let result = run parseA stringInput
-    let parseB = pChar 'B'
-    let parseC = pChar 'C'
+    let parseB = pchar 'B'
+    let parseC = pchar 'C'
     let parseAAndThenB = parseA .>>. parseB
     let parseAOrparseB = parseA <|> parseB
     let resultAB = run parseAAndThenB stringInput

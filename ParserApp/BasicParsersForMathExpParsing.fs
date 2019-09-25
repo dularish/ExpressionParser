@@ -7,8 +7,8 @@ open MathematicalExpressionParser
 open BasicParsers
 open LazyParserBlocks
 
-let parseCloseBracket = pChar ')' |>> fun(_) -> Token.Bracket BracketClose
-let parseOpenBracket = pChar '(' |>> fun(_) -> Token.Bracket BracketOpen
+let parseCloseBracket = pchar ')' |>> fun(_) -> Token.Bracket BracketClose
+let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
 let parseQuotedStringInnerValuesChoices =
     let alphabets =
@@ -19,13 +19,13 @@ let parseQuotedStringInnerValuesChoices =
     |> choice
 
 let parseQuotedString = 
-    ((pChar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pChar '"'))
+    ((pchar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pchar '"'))
     |>> List.reduce (+)
     |>> fun a -> ExpressionWithVariables (StringExpression a, [])
     <?> "quoted string"
 
 let parseDoubleNum =
-    (opt (pChar '-')) .>>. (many1 parseDigit) .>>. (opt ((pChar '.') .>>. (many1 parseDigit) ))
+    (opt (pchar '-')) .>>. (many1 parseDigit) .>>. (opt ((pchar '.') .>>. (many1 parseDigit) ))
     |>> (fun (wholeNums, decimalPart) ->
         let wholeNumsWithNegSignIfNeeded =
             match wholeNums with
@@ -48,7 +48,7 @@ let parseNumericTerm =
     <?> "numeric term"
 
 let parseNumArray =
-    pChar '[' .>> spaces >>. parseDoubleNum .>>. (many (spaces >>. pChar ',' >>. spaces >>. parseDoubleNum)) .>> pChar ']'
+    pchar '[' .>> spaces >>. parseDoubleNum .>>. (many (spaces >>. pchar ',' >>. spaces >>. parseDoubleNum)) .>> pchar ']'
     |>> (fun (head, tail) -> ExpressionWithVariables (Expression.NumArray (head::tail), []))
     <?> "num array"
 
