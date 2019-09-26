@@ -46,6 +46,7 @@ let ternaryExpression =
 let parseExpression=
       //Spaces are not handled here, so every dependent must handle spaces
       (ternaryExpression <|> (parseContinuousTerms))
+      <?> "Expression"
 
 //Setting the forward referenced parsers after their definition
 globalTermPerserRef := parseTerm
