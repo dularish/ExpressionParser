@@ -52,7 +52,7 @@ globalTermPerserRef := parseTerm
 globalExpParserRef := parseExpression
 
 let getParsedOutput inputString (variableNameBeingEvaluated) variablesDict =
-    runParserOnString (((initializeVariablesDict variablesDict) >>. (setVariableNameToUserState variableNameBeingEvaluated) >>. parseExpression) .>> eof) UserState.Default "mainStream" inputString
+    runParserOnString (((initializeVariablesDict variablesDict) >>. (setVariableNameToUserState variableNameBeingEvaluated) >>. (opt (pchar '=')) >>. parseExpression) .>> eof) UserState.Default "mainStream" inputString
 
 let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (variableNameBeingEvaluated) =
    let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated variablesDict
