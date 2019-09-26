@@ -30,12 +30,22 @@ let parseTerm =
     |> choice
     <?> "term"
 
+
 let parseContinuousTerms= 
-    ((parseTerm) .>>. (many ((opt(spaces >>? parseArithmeticOp .>> spaces)) .>>. ((parseTerm) <?> "term after operator"))))
+    //Spaces are handled here
+    spaces >>? ((parseTerm) .>>. (many ((opt(spaces >>? parseArithmeticOp .>> spaces)) .>>. ((parseTerm) <?> "term after operator")))) .>> spaces
     |>> convertContinuousTermsToSingleExpression
 
+
+let ternaryExpression =
+    //Spaces are not handled here, but handled in the dependent (parseContinuousTerms)
+    parseContinuousTerms .>>? pchar '?' .>>. parseContinuousTerms .>> pchar ':' .>>. parseContinuousTerms
+    |>> (fun ((ExpressionOutput condition,ExpressionOutput trueExp),ExpressionOutput falseExp) -> ExpressionOutput (TernaryExpression (condition, trueExp, falseExp)))
+    <?> "ternary expression"
+
 let parseExpression=
-     spaces >>. ((parseContinuousTerms)) .>> spaces
+      //Spaces are not handled here, so every dependent must handle spaces
+      (ternaryExpression <|> (parseContinuousTerms))
 
 //Setting the forward referenced parsers after their definition
 globalTermPerserRef := parseTerm

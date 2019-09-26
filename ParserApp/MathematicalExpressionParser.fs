@@ -119,6 +119,7 @@ type Brackets =
 type Expression = 
     | Constant of double
     | BinaryExpression of Expression*BinaryOperator*Expression
+    | TernaryExpression of Expression * Expression * Expression
     | UnaryExpression of UnaryOperator * Expression
     | StringExpression of string
     | NumArray of (double list)
@@ -419,6 +420,21 @@ let computeUnaryExpression operator (operand1:AllowedEvaluationResultTypes) =
         | x ->
             EvaluationFailure (InvalidOperatorUse (sprintf "Unary Operator %A cannot be used with Array types" x))
 
+let computeTernaryExpression (conditionRes:AllowedEvaluationResultTypes) (trueRes:AllowedEvaluationResultTypes) (falseRes:AllowedEvaluationResultTypes) =
+    match (conditionRes) with
+        | (Double conditionResDblValue) ->
+            match (trueRes, falseRes) with
+            | (Double trueResDblValue, Double falseResDblValue) ->
+                let resultToReturn = if conditionResDblValue = 1. then trueResDblValue else falseResDblValue
+                EvaluationSuccess (Double resultToReturn)
+            | (String trueResStringValue, String falseResStringValue) ->
+                let resultToReturn = if conditionResDblValue = 1. then trueResStringValue else falseResStringValue
+                EvaluationSuccess(String resultToReturn)
+            | _ ->
+                EvaluationFailure (InvalidOperatorUse (sprintf "Ternary operator should contain both the result expressions of same type and should either be String or Double"))
+        | _ ->
+            EvaluationFailure (InvalidOperatorUse (sprintf "Ternary operation condition expression should be of double"))
+
 let rec EvaluateExpression (exp: Expression option) =
     match exp with
     | Some someExp ->
@@ -436,6 +452,19 @@ let rec EvaluateExpression (exp: Expression option) =
             | (EvaluationFailure failure, _) ->
                 EvaluationFailure failure
             | (_ , EvaluationFailure failure) ->
+                EvaluationFailure failure
+        | TernaryExpression (condition, trueExp, falseExp) ->
+            let conditionResult = EvaluateExpression (Some condition)
+            let trueResult = EvaluateExpression (Some trueExp)
+            let falseResult = EvaluateExpression (Some falseExp)
+            match (conditionResult, trueResult, falseResult) with
+            | (EvaluationSuccess conditionRes, EvaluationSuccess trueRes, EvaluationSuccess falseRes) ->
+                computeTernaryExpression conditionRes trueRes falseRes
+            | (EvaluationFailure failure, _, _) ->
+                EvaluationFailure failure
+            | (_, EvaluationFailure failure, _) ->
+                EvaluationFailure failure
+            | (_, _, EvaluationFailure failure) ->
                 EvaluationFailure failure
         | UnaryExpression (unaryOp, exp) ->
             let expResult = EvaluateExpression (Some exp)
