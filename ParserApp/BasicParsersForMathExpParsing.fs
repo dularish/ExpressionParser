@@ -27,31 +27,13 @@ let parseQuotedString =
     |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "quoted string"
 
-let parseDoubleNum: Parser<_> =
-    (opt (pchar '-')) .>>. (many1 digit) .>>. (opt ((pchar '.') .>>. (many1 digit) ))
-    |>> (fun (wholeNums, decimalPart) ->
-        let wholeNumsWithNegSignIfNeeded =
-            match wholeNums with
-            | Some _ , wholeNumsList ->
-                '-' :: wholeNumsList
-            | _ , wholeNumsList ->
-                wholeNumsList
-        match decimalPart with
-        | Some (decimalPoint, decimalPartDigits) ->
-            let doubleExp = System.String(List.toArray(wholeNumsWithNegSignIfNeeded @ [decimalPoint] @ decimalPartDigits))
-                            |> double
-            doubleExp
-        | None ->
-            let doubleExp = System.String(List.toArray(wholeNumsWithNegSignIfNeeded)) |> double
-            doubleExp)
-
-let parseNumericTerm =
-    parseDoubleNum
+let parseNumericTerm: Parser<_> =
+    pfloat
     |>> (fun doubleNum -> ExpressionOutput (Expression.Constant doubleNum))
     <?> "numeric term"
 
-let parseNumArray =
-    pchar '[' .>> spaces >>. parseDoubleNum .>>. (many (spaces >>. pchar ',' >>. spaces >>. parseDoubleNum)) .>> pchar ']'
+let parseNumArray: Parser<_> =
+    pchar '[' .>> spaces >>. pfloat .>>. (many (spaces >>. pchar ',' >>. spaces >>. pfloat)) .>> pchar ']'
     |>> (fun (head, tail) -> ExpressionOutput (Expression.NumArray (head::tail)))
     <?> "num array"
 
