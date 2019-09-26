@@ -113,6 +113,10 @@ let refractoredImplExamples = fun() ->
             .Add("(2) + (17*2-30) * (5)+2 - (8/2)*4", 8.)
             .Add("(((((5)))))", 5.)
             .Add("(( ((2)) + 4))*((5))", 30.)
+            .Add("2 + 2(4)", 10.)
+            .Add("(1 + 2)(1 + 4)", 15.)
+            .Add("asin 0", infinity)
+            .Add("2*-2", -4.)
 
     let errorCases = 
         Map.empty
@@ -128,15 +132,7 @@ let refractoredImplExamples = fun() ->
             .Add("(((((4))))", ExpressionEvaluationError.UnBalancedParanthesis "")
             .Add("((2)) * ((3", ExpressionEvaluationError.UnBalancedParanthesis "")
             .Add("((9)) * ((1)", ExpressionEvaluationError.UnBalancedParanthesis "")
-
-    let developerDeliberatedNotHandledCases =
-        [
-        "2 2";
-        "2 + 2(4)"; //Not supported by existing Simpla expression parser
-        "(1 + 2)(1 + 4)"; //Not supported by existing Simpla expression parser
-        "asin 0"; //Existing Simpla expression parser returns -Infinity
-        "2*-2"//Existing simpla expression parser supports this//If this has to be supported, then the expression "2*--2" would also be supported
-        ]
+            .Add("2 2", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.IncompleteParsing ""))
 
     let multiLineInputs =
         [
@@ -191,8 +187,7 @@ let refractoredImplExamples = fun() ->
     printfn "Number of success cases : %A " countOfSuccess
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter printParsedOutput
     errorCases |> Map.toSeq |> Seq.map fst |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
-    printfn "Developer didn't handle it deliberately cases :"
-    developerDeliberatedNotHandledCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
+    printfn "\nMultiLineInputs :"
     multiLineInputs |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     errorMessagesImprovementNeededInputs |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
     printfn "\nCustom cases : "
