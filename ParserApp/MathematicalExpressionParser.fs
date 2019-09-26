@@ -6,15 +6,24 @@ open System.Collections.Generic
 type UserState = 
     {
         VariablesReferenced:string list;
+        VariablesReferencedByThisLayer:string list;
         VariablesDict:IDictionary<string,string>;
+        VariableName:string
     }
     with
-    static member Default = {VariablesReferenced = []; VariablesDict=dict[]}
+    static member Default = {VariablesReferenced = []; VariablesDict=dict[]; VariableName="unNamedVar"; VariablesReferencedByThisLayer = []}
 
-let pushVariableToUserState varName = 
+let softPushRefVarForThisLayer varName= 
     updateUserState (fun s -> 
-        {s with VariablesReferenced = varName::s.VariablesReferenced}
+        if (s.VariablesReferencedByThisLayer |> List.contains varName) then
+            s
+        else
+            {s with VariablesReferencedByThisLayer = varName::s.VariablesReferencedByThisLayer}
         )
+
+let setVariableNameToUserState varName =
+    updateUserState (fun s ->
+        {s with VariableName = varName})
 
 let initializeVariablesDict variablesDict =
     updateUserState (fun s ->
@@ -23,6 +32,11 @@ let initializeVariablesDict variablesDict =
 let initializeRefVars variablesRef =
     updateUserState (fun s ->
         {s with VariablesReferenced = variablesRef})
+
+let checkVarNotBeingSelfRef varName =
+    userStateSatisfies (fun s -> 
+                            not (s.VariableName = varName))
+    <?> (sprintf "Self referencing of variable %s" varName)
 
 let checkVarNotRefPrior varName =
     userStateSatisfies (fun s -> 
@@ -38,9 +52,9 @@ let parseVariableFromUserState =
                                 |> choice
             let pvalidVar = pChoiceVars
                             >>= (fun s ->
-                                    (checkVarNotRefPrior s) >>. (preturn s))
+                                    (checkVarNotBeingSelfRef s) >>. (checkVarNotRefPrior s) >>. (preturn s))
             pvalidVar
-            >>= (fun validVar -> preturn (validVar, s.VariablesDict.[validVar], s.VariablesDict, s.VariablesReferenced))
+            >>= (fun validVar -> preturn (validVar, s.VariablesDict.[validVar], s.VariablesDict, s.VariablesReferenced, s.VariableName))
             )
     <?> "Parsing variable failed"
 
@@ -110,7 +124,7 @@ type Expression =
     | NumArray of (double list)
 
 type ExpressionEvaluationReturnType =
-    |ExpressionWithVariables of (Expression * string list)
+    |ExpressionOutput of Expression
 
 type Token = 
     | DoubleConstant of double

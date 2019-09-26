@@ -24,7 +24,7 @@ let parseQuotedStringInnerValuesChoices: Parser<_> =
 let parseQuotedString = 
     ((pchar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pchar '"'))
     |>> List.reduce (+)
-    |>> fun a -> ExpressionWithVariables (StringExpression a, [])
+    |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "quoted string"
 
 let parseDoubleNum: Parser<_> =
@@ -47,19 +47,19 @@ let parseDoubleNum: Parser<_> =
 
 let parseNumericTerm =
     parseDoubleNum
-    |>> (fun doubleNum -> ExpressionWithVariables (Expression.Constant doubleNum, []))
+    |>> (fun doubleNum -> ExpressionOutput (Expression.Constant doubleNum))
     <?> "numeric term"
 
 let parseNumArray =
     pchar '[' .>> spaces >>. parseDoubleNum .>>. (many (spaces >>. pchar ',' >>. spaces >>. parseDoubleNum)) .>> pchar ']'
-    |>> (fun (head, tail) -> ExpressionWithVariables (Expression.NumArray (head::tail), []))
+    |>> (fun (head, tail) -> ExpressionOutput (Expression.NumArray (head::tail)))
     <?> "num array"
 
 let parseBoolStringAsDouble: Parser<_> =
     ((pstring "true") <|> (pstring "false"))
     |>> (fun s -> 
                 let doubleNum = if s = "true" then 1. else 0.
-                ExpressionWithVariables (Expression.Constant doubleNum, []))
+                ExpressionOutput (Expression.Constant doubleNum))
 
 let parseBracketedExpression =
     (between parseOpenBracket (parseCloseBracket <?> "matching closing paranthesis") (spaces >>. (globalExpParser) .>> spaces))
@@ -74,4 +74,4 @@ let parsePrefixedUnaryOpTerm =
         |>> unaryStrToUnaryOpUnion
     let expParsed = (((parseUnaryOp .>> spaces)) .>>. globalTermParser)
     expParsed
-    |>> (fun (unaryOp, (ExpressionWithVariables (expr, varList))) -> ExpressionWithVariables ((UnaryExpression (unaryOp, expr)), varList) )
+    |>> (fun (unaryOp, (ExpressionOutput (expr))) -> ExpressionOutput ((UnaryExpression (unaryOp, expr))) )

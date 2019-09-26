@@ -61,7 +61,7 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
         | [] -> []
         | _ ->
             operatorExpPairList
-            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> 
+            |> List.map (fun (x,(ExpressionOutput (y))) -> 
                             match x with
                             | Some operatorToken ->
                                 [MaybeOperator x]@[Expr y]
@@ -70,17 +70,8 @@ let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationRetu
                                 //Example cases : "2(4)", "(1+2)(2+3)"
                                 [MaybeOperator (Some (BinaryOperator Multiply))]@[Expr y])
             |> List.reduce (@)
-    let secondArgumentConvertedToSingleVariablesList =
-        match operatorExpPairList with
-        | [] -> []
-        | _ ->
-            operatorExpPairList
-            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> varList)
-            |> List.reduce (@)
     match firstExp with
-    | ExpressionWithVariables (firstExpr, firstVarList) ->
+    | ExpressionOutput (firstExpr) ->
         let expr = ((Expr ((firstExpr))) :: secondArgumentConvertedToSingleExprList)
                     |> performShuntingYardLogicOnList [] []
-        let varList = (firstVarList) @ (secondArgumentConvertedToSingleVariablesList)
-                      |> List.distinct
-        ExpressionWithVariables (expr, varList)
+        ExpressionOutput (expr)

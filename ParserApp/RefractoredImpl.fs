@@ -7,12 +7,12 @@ open System
 
 let parseVariableTerm=
     (parseVariableFromUserState
-    >>= (fun (varKey, varValue, variablesDict, variablesRef) ->
-                runParserOnString ((initializeRefVars variablesRef) >>. (pushVariableToUserState varKey) >>. (initializeVariablesDict variablesDict) >>. (globalExpParser)) UserState.Default varKey varValue
+    >>= (fun (varKey, varValue, variablesDict, variablesRef, currentVarName) ->
+                runParserOnString ((initializeRefVars (currentVarName:: variablesRef)) >>. (setVariableNameToUserState varKey) >>. (initializeVariablesDict variablesDict) >>. (globalExpParser)) UserState.Default varKey varValue
                 |> (fun x ->
                         match x with
-                        | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _, _) ->
-                            preturn (ExpressionWithVariables(expressionParsed, [varKey]))
+                        | Success ((ExpressionOutput (expressionParsed)), _, _) ->
+                            preturn (ExpressionOutput(expressionParsed)) .>> (softPushRefVarForThisLayer varKey)
                         | Failure (label, err, pos) ->
                             fail (sprintf "Error in evaluating the expression for the variable %s" varKey)
                 ))) .>> spaces
@@ -42,17 +42,17 @@ globalTermPerserRef := parseTerm
 globalExpParserRef := parseExpression
 
 let getParsedOutput inputString (variableNameBeingEvaluated) variablesDict =
-    runParserOnString (((initializeVariablesDict variablesDict) >>. (pushVariableToUserState variableNameBeingEvaluated) >>. parseExpression) .>> eof) UserState.Default "mainStream" inputString
+    runParserOnString (((initializeVariablesDict variablesDict) >>. (setVariableNameToUserState variableNameBeingEvaluated) >>. parseExpression) .>> eof) UserState.Default "mainStream" inputString
 
 let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (variableNameBeingEvaluated) =
    let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated variablesDict
    match parsedExpression with
-   | Success (expReturnType, remainingString, pos) ->
+   | Success (expReturnType, userState, pos) ->
         match expReturnType with
-        | ExpressionWithVariables (Expression.NumArray numarray, varList) ->
+        | ExpressionOutput (Expression.NumArray numarray) ->
             (EvaluationFailure (ArrayTypeNotSupportedAsReturnType "Expression returns Numeric Array type which is not a supported return type"), (""), Seq.ofList [])
-        | ExpressionWithVariables (expr, varList) ->
-            ((EvaluateExpression (Some expr)), "", Seq.ofList varList)
+        | ExpressionOutput (expr) ->
+            ((EvaluateExpression (Some expr)), "", Seq.ofList (List.distinct (userState.VariablesReferenced @ userState.VariablesReferencedByThisLayer)))
    | Failure (label, err, pos) ->
         (EvaluationFailure (ParsingError (MathExpressionParsingFailureType.UnhandledInput ("\n" + label))) , err.ToString() , Seq.ofList [])
            
