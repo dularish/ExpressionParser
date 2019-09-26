@@ -3,14 +3,48 @@ open System
 open FParsec
 open System.Collections.Generic
 
-type UserState = unit
-type Parser<'a> = Parser<'a, UserState>
+type UserState = 
+    {
+        VariablesReferenced:string list;
+        VariablesDict:IDictionary<string,string>;
+    }
+    with
+    static member Default = {VariablesReferenced = []; VariablesDict=dict[]}
 
-let mutable variables = dict [
-                "variableA", "1";
-                "variableB", "2";
-                "variableC", "variableB * variableB"
-                ]
+let pushVariableToUserState varName = 
+    updateUserState (fun s -> 
+        {s with VariablesReferenced = varName::s.VariablesReferenced}
+        )
+
+let initializeVariablesDict variablesDict =
+    updateUserState (fun s ->
+        {s with VariablesDict = variablesDict})
+
+let initializeRefVars variablesRef =
+    updateUserState (fun s ->
+        {s with VariablesReferenced = variablesRef})
+
+let checkVarNotRefPrior varName =
+    userStateSatisfies (fun s -> 
+                            not (s.VariablesReferenced |> List.contains varName))
+    <?> (sprintf "Circular referencing of variable %s" varName)
+
+let parseVariableFromUserState =
+    getUserState
+    >>= (fun s ->
+            let variables = List.ofSeq (s.VariablesDict.Keys)
+            let pChoiceVars = variables
+                                |> List.map (fun var -> pstring var)
+                                |> choice
+            let pvalidVar = pChoiceVars
+                            >>= (fun s ->
+                                    (checkVarNotRefPrior s) >>. (preturn s))
+            pvalidVar
+            >>= (fun validVar -> preturn (validVar, s.VariablesDict.[validVar], s.VariablesDict, s.VariablesReferenced))
+            )
+    <?> "Parsing variable failed"
+
+type Parser<'a> = Parser<'a, UserState>
 
 let masterVariables = dict [
                 "pi", Math.PI.ToString();

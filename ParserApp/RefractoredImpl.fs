@@ -2,149 +2,50 @@
 open MathematicalExpressionParser
 open FParsec
 open BasicParsersForMathExpParsing
-open LazyParserBlocks
+open HelperAlgosForMathExpParsing
 open System
 
-let parseVariableTerm (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesReferenced:string list)= fun() ->
-    let parseVariable =
-        variables.Keys
-        |> Seq.sortByDescending (fun x -> x.Length)
-        |> Seq.map (fun x -> pstring x)
-        |> List.ofSeq
-        |> choice
-    parseVariable
-    >>= (fun s ->
-                let variableExpr = variables.[s]
-                if (variablesReferenced |> List.contains s) then
-                    fail (sprintf "Circular referencing of variable %s" s)
-                else
-                    let newVariablesRef = s :: variablesReferenced
-                    run ((expParser (newVariablesRef))()) variableExpr
-                    |> (fun x ->
-                            match x with
-                            | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _, _) ->
-                                preturn (ExpressionWithVariables(expressionParsed, [s]))
-                            | Failure (label, err, pos) ->
-                                fail (sprintf "Error in evaluating the expression for the variable %s" s)
-                    ))
+let parseVariableTerm=
+    (parseVariableFromUserState
+    >>= (fun (varKey, varValue, variablesDict, variablesRef) ->
+                runParserOnString ((initializeRefVars variablesRef) >>. (pushVariableToUserState varKey) >>. (initializeVariablesDict variablesDict) >>. (globalExpParser)) UserState.Default varKey varValue
+                |> (fun x ->
+                        match x with
+                        | Success ((ExpressionWithVariables (expressionParsed, refVariables)), _, _) ->
+                            preturn (ExpressionWithVariables(expressionParsed, [varKey]))
+                        | Failure (label, err, pos) ->
+                            fail (sprintf "Error in evaluating the expression for the variable %s" varKey)
+                ))) .>> spaces
 
-let rec parseTerm (expParser) (variablesRef) = fun () ->
-    let termPossibilities =
-        [
-            (fun () -> parseNumericTerm); 
-            (fun () -> parseNumArray);
-            (fun () -> parseBoolStringAsDouble);
-            (parsePrefixedUnaryOpTerm ((parseTerm (expParser) variablesRef)));
-            (parseBracketedExpression expParser variablesRef)
-            (fun () -> parseQuotedString)
-        ]
-
-    let termOptions = 
-        if variables.Count > 0 then
-            termPossibilities @ [(parseVariableTerm expParser variablesRef)]
-        else
-            termPossibilities
-    let res =
-        termOptions |> lazyChoice
-    res()
+let parseTerm =
+    [
+        (parseNumericTerm); 
+        (parseNumArray);
+        (parseBoolStringAsDouble);
+        (parsePrefixedUnaryOpTerm);
+        (parseBracketedExpression)
+        (parseQuotedString);
+        (parseVariableTerm)
+    ]
+    |> choice
     <?> "term"
-    
 
-type ShuntingYardStreamCandidateTypes =
-    | MaybeOperator of Token option
-    | Expr of Expression
-
-let rec performShuntingYardLogicOnList expStack opStack streamList =
-    match streamList with
-    | [] ->
-        match opStack with
-        | stackTopOp :: restOps ->
-            match expStack with
-            | topMostExp :: secondTopExp :: restExps ->
-                let newExprToPush = BinaryExpression (secondTopExp, stackTopOp, topMostExp)
-                performShuntingYardLogicOnList (newExprToPush :: restExps) (restOps) []
-            | _ ->
-                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
-                Expression.Constant -1.
-        | [] ->
-            match expStack with
-            | onlyStackExp :: [] ->
-                onlyStackExp
-            | _ ->
-                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
-                Expression.Constant -1.
-    | topMostOfStream :: restStream ->
-        match topMostOfStream with
-        | MaybeOperator operator ->
-            match operator with
-            | None ->
-                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
-                Expression.Constant -1.
-            | Some ( BinaryOperator someOp) ->
-                match opStack with
-                | [] ->
-                    performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
-                | opStackTop :: opStackRest ->
-                    if ((getPriority(someOp) > getPriority(opStackTop)) || (((someOp = opStackTop) && ((getAssociativity someOp) = Right )))) then
-                        performShuntingYardLogicOnList expStack (someOp :: opStack) restStream
-                    else
-                        match expStack with
-                        | topMostExp :: secondTopExp :: restExps ->
-                            let newExprToPush = BinaryExpression (secondTopExp, opStackTop, topMostExp)
-                            performShuntingYardLogicOnList (newExprToPush :: restExps) (opStackRest) streamList
-                        | _ ->
-                            //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
-                            Expression.Constant -1.
-            | _ ->
-                //Control to this point not expected, would mean the logical problem unhandled at some other point, which the developer has to be know
-                Expression.Constant -1.
-        | Expr someExp ->
-            performShuntingYardLogicOnList (someExp :: expStack) opStack restStream
-
-let convertContinuousTermsToSingleExpression (firstExp:(ExpressionEvaluationReturnType),(operatorExpPairList:(Token option * (ExpressionEvaluationReturnType))list)) =
-    let secondArgumentConvertedToSingleExprList =
-        match operatorExpPairList with
-        | [] -> []
-        | _ ->
-            operatorExpPairList
-            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> 
-                            match x with
-                            | Some operatorToken ->
-                                [MaybeOperator x]@[Expr y]
-                            | None ->
-                                //When there are two valid terms not separated by an operator, implicitly assumed to be of multiplication
-                                //Example cases : "2(4)", "(1+2)(2+3)"
-                                [MaybeOperator (Some (BinaryOperator Multiply))]@[Expr y])
-            |> List.reduce (@)
-    let secondArgumentConvertedToSingleVariablesList =
-        match operatorExpPairList with
-        | [] -> []
-        | _ ->
-            operatorExpPairList
-            |> List.map (fun (x,(ExpressionWithVariables (y,varList))) -> varList)
-            |> List.reduce (@)
-    match firstExp with
-    | ExpressionWithVariables (firstExpr, firstVarList) ->
-        let expr = ((Expr ((firstExpr))) :: secondArgumentConvertedToSingleExprList)
-                    |> performShuntingYardLogicOnList [] []
-        let varList = (firstVarList) @ (secondArgumentConvertedToSingleVariablesList)
-                      |> List.distinct
-        ExpressionWithVariables (expr, varList)
-
-
-let parseContinuousTerms expParser variablesRef= fun() ->
-    ((parseTerm expParser variablesRef)() .>>. (many ((opt(spaces >>? parseArithmeticOp .>> spaces)) .>>. ((parseTerm expParser variablesRef)() <?> "term after operator"))))
+let parseContinuousTerms= 
+    ((parseTerm) .>>. (many ((opt(spaces >>? parseArithmeticOp .>> spaces)) .>>. ((parseTerm) <?> "term after operator"))))
     |>> convertContinuousTermsToSingleExpression
 
-let rec parseExpression variablesRef= fun () ->
-     spaces >>. ((parseContinuousTerms (parseExpression) variablesRef))() .>> spaces
+let parseExpression=
+     spaces >>. ((parseContinuousTerms)) .>> spaces
 
-let getParsedOutput inputString (variableNameBeingEvaluated) =
-    run ((parseExpression [variableNameBeingEvaluated])() .>> eof) inputString
+//Setting the forward referenced parsers after their definition
+globalTermPerserRef := parseTerm
+globalExpParserRef := parseExpression
+
+let getParsedOutput inputString (variableNameBeingEvaluated) variablesDict =
+    runParserOnString (((initializeVariablesDict variablesDict) >>. (pushVariableToUserState variableNameBeingEvaluated) >>. parseExpression) .>> eof) UserState.Default "mainStream" inputString
 
 let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (variableNameBeingEvaluated) =
-   variables <- variablesDict
-   let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated
+   let parsedExpression = getParsedOutput expressionString variableNameBeingEvaluated variablesDict
    match parsedExpression with
    | Success (expReturnType, remainingString, pos) ->
         match expReturnType with
@@ -157,6 +58,12 @@ let parseAndEvaluateExpressionExpressively (expressionString) (variablesDict) (v
            
 
 let refractoredImplExamples = fun() ->
+    let variables = dict [
+        "variableA", "1";
+        "variableB", "2";
+        "variableC", "variableB * variableB"
+        ]
+
     let successTestCases = 
         Map.empty
             //Region begin - TestcasesCreated by me
@@ -303,5 +210,5 @@ let refractoredImplExamples = fun() ->
 
     printfn "\n\nVariables test cases : "
     let variableTestCases =
-        ["variableA + variableB"; "variableC + variableA"]
-    variableTestCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
+        dict["firstVar","variableA + variableB"; "secondVar","variableC + variableA"]
+    variableTestCases |> Seq.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s.Value) (parseAndEvaluateExpressionExpressively (s.Value) variables (s.Key)))

@@ -4,10 +4,14 @@ open System
 open System.Collections.Generic
 open FParsec
 open MathematicalExpressionParser
-open LazyParserBlocks
 
 let parseCloseBracket = pchar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen
+
+//The below Parsers would be set in the future after they are defined, but the other parsers that are defined before them need them
+    //Nested grammers need to make use of this feature
+let globalTermParser, globalTermPerserRef = createParserForwardedToRef<ExpressionEvaluationReturnType,UserState>()
+let globalExpParser, globalExpParserRef = createParserForwardedToRef<ExpressionEvaluationReturnType, UserState>()
 
 let parseQuotedStringInnerValuesChoices: Parser<_> =
     let alphabets =
@@ -57,10 +61,10 @@ let parseBoolStringAsDouble: Parser<_> =
                 let doubleNum = if s = "true" then 1. else 0.
                 ExpressionWithVariables (Expression.Constant doubleNum, []))
 
-let parseBracketedExpression (expParser:(string list -> unit -> Parser<ExpressionEvaluationReturnType>)) (variablesRef) = fun() ->
-    (between parseOpenBracket (parseCloseBracket <?> "matching closing paranthesis") (spaces >>. (expParser variablesRef)() .>> spaces))
+let parseBracketedExpression =
+    (between parseOpenBracket (parseCloseBracket <?> "matching closing paranthesis") (spaces >>. (globalExpParser) .>> spaces))
 
-let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationReturnType>))= fun() ->
+let parsePrefixedUnaryOpTerm =
     let parseUnaryOp = 
         unaryOps
         |> Seq.sortByDescending (fun x -> x.Length)
@@ -68,6 +72,6 @@ let parsePrefixedUnaryOpTerm (termParser:(unit -> Parser<ExpressionEvaluationRet
         |> List.ofSeq
         |> choice
         |>> unaryStrToUnaryOpUnion
-    let expParsed = ((fun () -> (parseUnaryOp .>> spaces)) .^>>^. termParser)
+    let expParsed = (((parseUnaryOp .>> spaces)) .>>. globalTermParser)
     expParsed
     |>> (fun (unaryOp, (ExpressionWithVariables (expr, varList))) -> ExpressionWithVariables ((UnaryExpression (unaryOp, expr)), varList) )
