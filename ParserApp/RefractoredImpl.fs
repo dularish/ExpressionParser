@@ -25,7 +25,8 @@ let parseTerm =
         (parsePrefixedUnaryOpTerm);
         (parseBracketedExpression)
         (parseQuotedString);
-        (parseVariableTerm)
+        (parseVariableTerm);
+        (parseMasterVariable);
     ]
     |> choice
     <?> "term"

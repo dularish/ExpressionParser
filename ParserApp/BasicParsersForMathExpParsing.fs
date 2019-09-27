@@ -57,3 +57,22 @@ let parsePrefixedUnaryOpTerm =
     let expParsed = (((parseUnaryOp .>> spaces)) .>>. globalTermParser)
     expParsed
     |>> (fun (unaryOp, (ExpressionOutput (expr))) -> ExpressionOutput ((UnaryExpression (unaryOp, expr))) )
+
+let parseMasterVariable: Parser<_> =
+    let variables = List.ofSeq (masterVariables.Keys)
+    let pChoiceVars = 
+        variables
+        |> List.map (fun var -> pstring var)
+        |> choice
+    pChoiceVars
+    >>= (fun masterVar -> 
+            runParserOnString ((globalExpParser)) UserState.Default masterVar masterVariables.[masterVar]
+            |> (fun x ->
+                    match x with
+                    | Success ((ExpressionOutput (expressionParsed)), _, _) ->
+                        preturn (ExpressionOutput(expressionParsed))
+                    | Failure (label, err, pos) ->
+                        fail (sprintf "Error in evaluating the expression for the master variable %s" masterVar)
+            ))
+
+    <?> "master variable"
