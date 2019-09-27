@@ -144,6 +144,7 @@ let refractoredImplExamples = fun() ->
             .Add("((2)) * ((3", ExpressionEvaluationError.UnBalancedParanthesis "")
             .Add("((9)) * ((1)", ExpressionEvaluationError.UnBalancedParanthesis "")
             .Add("2 2", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.IncompleteParsing ""))
+            .Add("2 sin(3.143)", ExpressionEvaluationError.ParsingError (MathExpressionParsingFailureType.UnexpectedToken "Cannot allow this because we would be allowing to treat \"2 2\" as 2 * 2"))
 
     let multiLineInputs =
         [
