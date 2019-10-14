@@ -14,15 +14,15 @@ let globalTermParser, globalTermPerserRef = createParserForwardedToRef<Expressio
 let globalExpParser, globalExpParserRef = createParserForwardedToRef<ExpressionEvaluationReturnType, UserState>()
 
 let parseQuotedStringInnerValuesChoices: Parser<_> =
-    let alphabets =
-        ['a'..'z'] @ ['A'..'Z']
+    let alphaNumeric =
+        ['a'..'z'] @ ['A'..'Z'] @ ['0'..'9']
         |> List.map (fun a -> a.ToString())
-    alphabets @ ["\\\""] @ [" "]
+    alphaNumeric @ ["\\\""] @ [" "] @ ["/";":";".";"_";"-"]
     |> List.map (fun s -> pstring s)
     |> choice
 
 let parseQuotedString = 
-    ((pchar '"') >>. (many parseQuotedStringInnerValuesChoices) .>> (pchar '"'))
+    ((pchar '"') >>. (many1 parseQuotedStringInnerValuesChoices) .>> (pchar '"'))
     |>> List.reduce (+)
     |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "quoted string"
