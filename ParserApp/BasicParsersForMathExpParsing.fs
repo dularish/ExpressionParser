@@ -13,17 +13,21 @@ let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen
 let globalTermParser, globalTermPerserRef = createParserForwardedToRef<ExpressionEvaluationReturnType,UserState>()
 let globalExpParser, globalExpParserRef = createParserForwardedToRef<ExpressionEvaluationReturnType, UserState>()
 
-let parseQuotedStringInnerValuesChoices: Parser<_> =
-    let alphaNumeric =
-        ['a'..'z'] @ ['A'..'Z'] @ ['0'..'9']
-        |> List.map (fun a -> a.ToString())
-    alphaNumeric @ ["\\\""] @ [" "] @ ["/";":";".";"_";"-"]
-    |> List.map (fun s -> pstring s)
-    |> choice
+let parseQuotedString: Parser<_> =
+    let normalChar = 
+        satisfy (fun s -> s <> '\\' && s <> '"')
 
-let parseQuotedString = 
-    ((pchar '"') >>. (many1 parseQuotedStringInnerValuesChoices) .>> (pchar '"'))
-    |>> List.reduce (+)
+    let unescapeChar s = match s with
+                         | 'n' -> '\n'
+                         | 'r' -> '\r'
+                         | 't' -> '\t'
+                         | s -> s
+
+    let escapedChar = 
+        pchar '\\' >>. ((anyOf "\\nrt\"" |>> unescapeChar) <?> "valid escaped character")
+        <?> "escape sequence"
+
+    ((pchar '"') >>. ((many1Chars (normalChar <|> escapedChar)) <?> "atleast one character") .>> (pchar '"'))
     |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "quoted string"
 
