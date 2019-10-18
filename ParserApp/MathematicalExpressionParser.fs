@@ -48,6 +48,7 @@ let parseVariableFromUserState =
     >>= (fun s ->
             let variables = List.ofSeq (s.VariablesDict.Keys)
             let pChoiceVars = variables
+                                |> List.sortByDescending (fun s -> s.Length)
                                 |> List.map (fun var -> pstring var)
                                 |> choice
             let pvalidVar = pChoiceVars
@@ -62,7 +63,8 @@ type Parser<'a> = Parser<'a, UserState>
 
 let masterVariables = dict [
                 "pi", Math.PI.ToString();
-                "e", Math.E.ToString()]
+                "e", Math.E.ToString();
+                "Math.PI", Math.PI.ToString()]
 
 type BinaryOperator =
     | Plus
@@ -139,6 +141,10 @@ type Token =
 type StableToken =
     | Operator of BinaryOperator
     | Expression of Expression
+
+type Sign =
+    |PlusSign
+    |MinusSign
 
 let binaryOps = 
         ["+";"-";"/";"*";"^";"%";"==";"!=";">=";"<=";">";"<";"&&";"||"]

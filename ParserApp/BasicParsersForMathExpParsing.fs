@@ -50,6 +50,29 @@ let parseBoolStringAsDouble: Parser<_> =
 let parseBracketedExpression =
     (between parseOpenBracket (parseCloseBracket <?> "matching closing paranthesis") (spaces >>. (globalExpParser) .>> spaces))
 
+let parseSign: Parser<_> =
+    ((pchar '+') <|> (pchar '-'))
+    |>> (fun s -> 
+            match s with
+            | '-' -> MinusSign
+            | '+' -> PlusSign)
+
+let parseSignedParser (pExp:(Parser<ExpressionEvaluationReturnType>)) =
+    ((opt parseSign) .>>.? (spaces >>? pExp))
+    |>> (fun (sign,exp) ->
+            match sign with
+            | Some someSign ->
+                match someSign with
+                | PlusSign -> exp
+                | MinusSign -> 
+                    match exp with
+                    | ExpressionOutput someExp -> ExpressionOutput (BinaryExpression(Expression.Constant(-1.), BinaryOperator.Multiply, someExp))
+            | None -> exp)
+
+
+let parseSignedBracketedExpression =
+    parseSignedParser parseBracketedExpression
+
 let parsePrefixedUnaryOpTerm =
     let parseUnaryOp = 
         unaryOps
@@ -62,8 +85,13 @@ let parsePrefixedUnaryOpTerm =
     expParsed
     |>> (fun (unaryOp, (ExpressionOutput (expr))) -> ExpressionOutput ((UnaryExpression (unaryOp, expr))) )
 
+let parseSignedUnaryOpTerm =
+    parseSignedParser parsePrefixedUnaryOpTerm
+
 let parseMasterVariable: Parser<_> =
-    let variables = List.ofSeq (masterVariables.Keys)
+    let variables = 
+        List.ofSeq (masterVariables.Keys)
+        |> List.sortByDescending (fun s -> s.Length)
     let pChoiceVars = 
         variables
         |> List.map (fun var -> pstring var)
@@ -80,3 +108,6 @@ let parseMasterVariable: Parser<_> =
             ))
 
     <?> "master variable"
+
+let parseSignedMasterVariable =
+    parseSignedParser parseMasterVariable

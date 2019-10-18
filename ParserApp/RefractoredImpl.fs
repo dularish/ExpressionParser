@@ -17,16 +17,19 @@ let parseVariableTerm=
                             fail (sprintf "Error in evaluating the expression for the variable %s" varKey)
                 ))) .>> spaces
 
+let parseSignedVariableTerm =
+    parseSignedParser parseVariableTerm
+
 let parseTerm =
     [
         (parseNumericTerm); 
         (parseNumArray);
         (parseBoolStringAsDouble);
-        (parsePrefixedUnaryOpTerm);
-        (parseBracketedExpression)
+        (parseSignedUnaryOpTerm);
+        (parseSignedBracketedExpression)
         (parseQuotedString);
-        (parseVariableTerm);
-        (parseMasterVariable);
+        (parseSignedVariableTerm);
+        (parseSignedMasterVariable);
     ]
     |> choice
     <?> "term"
@@ -40,7 +43,7 @@ let parseContinuousTerms=
 
 let ternaryExpression =
     //Spaces are not handled here, but handled in the dependent (parseContinuousTerms)
-    parseContinuousTerms .>>? pchar '?' .>>. parseContinuousTerms .>> pchar ':' .>>. parseContinuousTerms
+    parseContinuousTerms .>>? pchar '?' .>>. globalExpParser .>> pchar ':' .>>. globalExpParser
     |>> (fun ((ExpressionOutput condition,ExpressionOutput trueExp),ExpressionOutput falseExp) -> ExpressionOutput (TernaryExpression (condition, trueExp, falseExp)))
     <?> "ternary expression"
 
