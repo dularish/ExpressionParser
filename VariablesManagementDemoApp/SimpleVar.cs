@@ -119,7 +119,7 @@ namespace VariablesManagementDemoApp
             Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.ToDictionary(s => s.Name, s => s.StrValue);
             //var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
             
-            var parsedOutput = RefractoredImpl.parseAndEvaluateExpressionExpressively(value, dictForEvaluation, this.Name);
+            var parsedOutput = FParsecExpressionEvaluator.parseAndEvaluateExpressionExpressively(value, dictForEvaluation, this.Name);
 
             List<string> refVariables = parsedOutput.Item3.ToList();
 
@@ -143,17 +143,17 @@ namespace VariablesManagementDemoApp
 
             if (parsedOutput.Item1.IsEvaluationSuccess)
             {
-                var evaluatedResultItem = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationSuccess).Item;
+                var evaluatedResultItem = (parsedOutput.Item1 as ExpParserConfigurables.ExpressionEvaluationResult.EvaluationSuccess).Item;
 
                 string evaluatedResultString = string.Empty;
 
                 if (evaluatedResultItem.IsDouble)
                 {
-                    evaluatedResultString = (evaluatedResultItem as MathematicalExpressionParser.AllowedEvaluationResultTypes.Double).Item.ToString();
+                    evaluatedResultString = (evaluatedResultItem as ExpParserConfigurables.AllowedEvaluationResultTypes.Double).Item.ToString();
                 }
                 else if (evaluatedResultItem.IsString)
                 {
-                    evaluatedResultString = (evaluatedResultItem as MathematicalExpressionParser.AllowedEvaluationResultTypes.String).Item;
+                    evaluatedResultString = (evaluatedResultItem as ExpParserConfigurables.AllowedEvaluationResultTypes.String).Item;
                 }
                 else
                 {
@@ -168,7 +168,7 @@ namespace VariablesManagementDemoApp
             }
             else
             {
-                string evaluationErrorMessage = (parsedOutput.Item1 as MathematicalExpressionParser.ExpressionEvaluationResult.EvaluationFailure).Item.ToString();
+                string evaluationErrorMessage = (parsedOutput.Item1 as ExpParserConfigurables.ExpressionEvaluationResult.EvaluationFailure).Item.ToString();
 
                 evaluatedResult = string.Empty;
                 evaluationFailureMessage = evaluationErrorMessage;
