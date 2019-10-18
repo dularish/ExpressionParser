@@ -1,8 +1,8 @@
-﻿module RefractoredImpl
-open MathematicalExpressionParser
+﻿module FParsecExpressionEvaluator
+open ExpParserConfigurables
 open FParsec
-open BasicParsersForMathExpParsing
-open HelperAlgosForMathExpParsing
+open BasicParsers
+open AlgorithmImpl
 open System
 
 let parseVariableTerm=
@@ -14,7 +14,7 @@ let parseVariableTerm=
                         | Success ((ExpressionOutput (expressionParsed)), _, _) ->
                             preturn (ExpressionOutput(expressionParsed)) .>> (softPushRefVarForThisLayer varKey)
                         | Failure (label, err, pos) ->
-                            fail (sprintf "Error in evaluating the expression for the variable %s" varKey)
+                            fail (sprintf "Error in evaluating the expression for the variable %s ->\n%s" varKey label)
                 ))) .>> spaces
 
 let parseSignedVariableTerm =

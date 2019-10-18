@@ -1,4 +1,4 @@
-﻿module MathematicalExpressionParser
+﻿module ExpParserConfigurables
 open System
 open FParsec
 open System.Collections.Generic

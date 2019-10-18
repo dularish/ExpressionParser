@@ -1,9 +1,9 @@
-﻿module BasicParsersForMathExpParsing
+﻿module BasicParsers
 
 open System
 open System.Collections.Generic
 open FParsec
-open MathematicalExpressionParser
+open ExpParserConfigurables
 
 let parseCloseBracket = pchar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen

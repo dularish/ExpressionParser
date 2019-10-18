@@ -1,5 +1,5 @@
-﻿module HelperAlgosForMathExpParsing
-open MathematicalExpressionParser
+﻿module AlgorithmImpl
+open ExpParserConfigurables
 
 type ShuntingYardStreamCandidateTypes =
     | MaybeOperator of Token option
