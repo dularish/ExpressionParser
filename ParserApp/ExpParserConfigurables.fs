@@ -349,6 +349,8 @@ let computeBinaryExpression (operand1:AllowedEvaluationResultTypes) operator (op
         match operator with
         | Plus ->
             EvaluationSuccess (String (getStringValueOfEvaluationResultType(operand1) + getStringValueOfEvaluationResultType(operand2)))
+        | EqualTo ->
+            EvaluationSuccess (Double (boolToDouble(getStringValueOfEvaluationResultType(operand1) = getStringValueOfEvaluationResultType(operand2))))
         | _ ->
            EvaluationFailure (InvalidOperatorUse (sprintf "Operator %A cannot be used with String types" operator)) 
     | (NumericArray _ , _)

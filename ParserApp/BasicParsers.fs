@@ -31,6 +31,24 @@ let parseQuotedString: Parser<_> =
     |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "quoted string"
 
+let parseSimplaString: Parser<_> =
+    let normalChar = 
+        satisfy (fun s -> s <> '"' && s <> '\\')
+        |>> fun a -> a
+
+    let escapedChar = 
+        pchar '\\' .>>. (opt (pchar '"'))
+        |>> (fun (a,b) -> 
+                match b with
+                | Some someB ->
+                    a.ToString() + someB.ToString()
+                | _ -> a.ToString())
+        <?> "escape sequence"
+
+    ((pchar '"') >>. ((manyStrings ((many1Chars normalChar) <|> (escapedChar))) <?> "atleast one character") .>> (pchar '"'))
+    |>> fun a -> ExpressionOutput (StringExpression a)
+    <?> "SIMPLA string"
+
 let parseNumericTerm: Parser<_> =
     pfloat
     |>> (fun doubleNum -> ExpressionOutput (Expression.Constant doubleNum))

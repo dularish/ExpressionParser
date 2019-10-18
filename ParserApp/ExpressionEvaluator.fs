@@ -25,10 +25,10 @@ let parseTerm =
         (parseNumericTerm); 
         (parseNumArray);
         (parseBoolStringAsDouble);
-        (parseSignedUnaryOpTerm);
         (parseSignedBracketedExpression)
-        (parseQuotedString);
+        (parseSimplaString);
         (parseSignedVariableTerm);
+        (parseSignedUnaryOpTerm);
         (parseSignedMasterVariable);
     ]
     |> choice
@@ -215,7 +215,8 @@ let refractoredImplExamples = fun() ->
         "ceil cos 0.5";
         "floor cos 0.5";
         "cos 0.5 * 2";
-        "cos 1.0"
+        "cos 1.0";
+        "\"\\\\ ab \\\" cd\""
         ]
     customCases |> List.iter (fun s -> printfn "ExpressionInput: %A\nEvaluatedOutput: %A" (s) (parseAndEvaluateExpressionExpressively s variables "someUniqueName"))
 
