@@ -37,15 +37,15 @@ let parseSimplaString: Parser<_> =
         |>> fun a -> a
 
     let escapedChar = 
-        pchar '\\' .>>. (opt (pchar '"'))
+        pchar '\\' .>>. (opt (anyOf "\"\\"))
         |>> (fun (a,b) -> 
                 match b with
                 | Some someB ->
-                    a.ToString() + someB.ToString()
+                    someB.ToString()
                 | _ -> a.ToString())
         <?> "escape sequence"
 
-    ((pchar '"') >>. ((manyStrings ((many1Chars normalChar) <|> (escapedChar))) <?> "atleast one character") .>> (pchar '"'))
+    ((pchar '"') >>. ((manyStrings ((many1Chars normalChar) <|> (escapedChar)))) .>> (pchar '"'))
     |>> fun a -> ExpressionOutput (StringExpression a)
     <?> "SIMPLA string"
 
