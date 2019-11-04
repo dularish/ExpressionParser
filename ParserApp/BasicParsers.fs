@@ -8,6 +8,8 @@ open ExpParserConfigurables
 let parseCloseBracket = pchar ')' |>> fun(_) -> Token.Bracket BracketClose
 let parseOpenBracket = pchar '(' |>> fun(_) -> Token.Bracket BracketOpen
 
+let parseComma = pchar ',' <?> "Comma"
+
 //The below Parsers would be set in the future after they are defined, but the other parsers that are defined before them need them
     //Nested grammers need to make use of this feature
 let globalTermParser, globalTermPerserRef = createParserForwardedToRef<ExpressionEvaluationReturnType,UserState>()
@@ -94,17 +96,33 @@ let parseSignedBracketedExpression =
 let parsePrefixedUnaryOpTerm =
     let parseUnaryOp = 
         unaryOps
-        |> Seq.sortByDescending (fun x -> x.Length)
-        |> Seq.map (fun x -> pstring x)
+        |> Seq.sortByDescending (fun x -> x.Key.Length)
+        |> Seq.map (fun x -> pstring x.Key)
         |> List.ofSeq
         |> choice
-        |>> unaryStrToUnaryOpUnion
+        |>> (fun s -> unaryOps.[s])
     let expParsed = (((parseUnaryOp .>> spaces)) .>>. globalTermParser)
     expParsed
     |>> (fun (unaryOp, (ExpressionOutput (expr))) -> ExpressionOutput ((UnaryExpression (unaryOp, expr))) )
 
 let parseSignedUnaryOpTerm =
     parseSignedParser parsePrefixedUnaryOpTerm
+
+let parseBinaryFuncTerm =
+    let parseBinaryFunc =
+        binaryFunctions
+        |> Seq.sortByDescending(fun x -> x.Key.Length)
+        |> Seq.map (fun x -> pstring x.Key)
+        |> List.ofSeq
+        |> choice
+        |>> (fun s -> binaryFunctions.[s])
+    let parseTupleTerms = parseOpenBracket >>. spaces >>. globalTermParser .>> spaces .>> parseComma .>> spaces .>>. globalTermParser .>> spaces .>> parseCloseBracket
+    let expParsed = ((parseBinaryFunc .>> spaces) .>>. parseTupleTerms)
+    expParsed
+    |>> (fun (binaryFunc, ((ExpressionOutput expr1), (ExpressionOutput expr2))) -> ExpressionOutput (BinaryFuncExpression (binaryFunc,expr1,expr2)))
+
+let parseSignedBinaryFuncTerm =
+    parseSignedParser parseBinaryFuncTerm
 
 let parseMasterVariable: Parser<_> =
     let variables = 

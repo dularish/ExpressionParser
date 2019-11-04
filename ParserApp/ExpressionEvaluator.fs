@@ -28,6 +28,7 @@ let parseTerm =
         (parseSignedBracketedExpression)
         (parseSimplaString);
         (parseSignedVariableTerm);
+        (parseSignedBinaryFuncTerm);
         (parseSignedUnaryOpTerm);
         (parseSignedMasterVariable);
     ]

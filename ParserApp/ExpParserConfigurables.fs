@@ -110,6 +110,10 @@ type UnaryOperator =
     | Sum
     | SumSquared
 
+type BinaryFunction =
+    |ATan2
+    |UnknownFunction
+
 type Operator =
     | BinaryOperator of BinaryOperator
     | UnaryOperator of UnaryOperator
@@ -123,6 +127,7 @@ type Expression =
     | BinaryExpression of Expression*BinaryOperator*Expression
     | TernaryExpression of Expression * Expression * Expression
     | UnaryExpression of UnaryOperator * Expression
+    | BinaryFuncExpression of BinaryFunction * Expression * Expression
     | StringExpression of string
     | NumArray of (double list)
 
@@ -147,60 +152,19 @@ type Sign =
     |MinusSign
 
 let binaryOps = 
-        ["+";"-";"/";"*";"^";"%";"==";"!=";">=";"<=";">";"<";"&&";"||"]
+        dict["+",(BinaryOperator (Plus));"-",(BinaryOperator (Minus));"/",(BinaryOperator (Divide));"*",(BinaryOperator (Multiply));"^",(BinaryOperator (Pow));"%",(BinaryOperator (Modulo));"==",(BinaryOperator (EqualTo));"!=",(BinaryOperator (NotEqualTo));">=",(BinaryOperator (GreaterThanOrEqualTo));"<=",(BinaryOperator (LessThanOrEqualTo));">",(BinaryOperator (GreaterThan));"<",(BinaryOperator (LessThan));"&&",(BinaryOperator (LogicalAnd));"||",(BinaryOperator (LogicalOr))]
 
 let unaryOps =
-    ["exp";"sin";"cos";"tan";"acos";"asin";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"log";"ln";"floor";"ceil";"sqrt";"abs";"!";"mean";"min";"max";"sd";"sum";"sumsquared"]
+    dict["exp",Exp;"sin",Sin;"cos",Cos;"tan",Tan;"acos",ACos;"asin",ASin;"atan",ATan;"sinh",ASinh;"cosh",Cosh;"tanh",Tanh;"asinh",ASinh;"acosh",ACosh;"atanh",ATanh;"log",Log;"ln",Ln;"floor",Floor;"ceil",Ceil;"sqrt",Sqrt;"abs",Abs;"!",Not;"mean",Mean;"min",Min;"max",Max;"sd",Sd;"sum",Sum;"sumsquared",SumSquared]
 
-let arithmeticCharToUnion input =
-    if input = "+" then (BinaryOperator (Plus))
-    elif input = "-" then (BinaryOperator (Minus))
-    elif input = "*" then (BinaryOperator (Multiply))
-    elif input = "^" then (BinaryOperator (Pow))
-    elif input = "%" then (BinaryOperator (Modulo))
-    elif input = "/" then (BinaryOperator (Divide))
-    elif input = "==" then (BinaryOperator (EqualTo))
-    elif input = "!=" then (BinaryOperator (NotEqualTo))
-    elif input = ">=" then (BinaryOperator (GreaterThanOrEqualTo))
-    elif input = "<=" then (BinaryOperator (LessThanOrEqualTo))
-    elif input = ">" then (BinaryOperator (GreaterThan))
-    elif input = "<" then (BinaryOperator (LessThan))
-    elif input = "&&" then (BinaryOperator (LogicalAnd))
-    else (BinaryOperator (LogicalOr))
-
-let unaryStrToUnaryOpUnion input =
-    if input = "exp" then ( (Exp))
-    elif input = "sin" then ( (Sin))
-    elif input = "cos" then ( (Cos))
-    elif input = "tan" then ((Tan))
-    elif input = "asin" then ((ASin))
-    elif input = "acos" then ((ACos))
-    elif input = "atan" then ((ATan))
-    elif input = "sinh" then ((Sinh))
-    elif input = "cosh" then ((Cosh))
-    elif input = "tanh" then ((Tanh))
-    elif input = "asinh" then ((ASinh))
-    elif input = "acosh" then ((ACosh))
-    elif input = "atanh" then ((ATanh))
-    elif input = "log" then ((Log))
-    elif input = "ln" then ((Ln))
-    elif input = "floor" then ((Floor))
-    elif input = "ceil" then ((Ceil))
-    elif input = "sqrt" then ((Sqrt))
-    elif input = "abs" then ((Abs))
-    elif input = "sum" then ((Sum))
-    elif input = "sumsquared" then ((SumSquared))
-    elif input = "mean" then ((Mean))
-    elif input = "min" then ((Min))
-    elif input = "max" then ((Max))
-    elif input = "sd" then ((Sd))
-    else ((Not))
+let binaryFunctions =
+    dict["atan2",ATan2]
 
 let parseArithmeticOp: Parser<_> =
     binaryOps
-    |> List.map (fun x -> pstring x)
+    |> Seq.map (fun x -> pstring x.Key)
     |> choice
-    |>> arithmeticCharToUnion
+    |>> (fun s -> binaryOps.[s])
     <?> "arithmetic operator"
 
 let masterVariableNameToToken inputString =
@@ -428,6 +392,19 @@ let computeUnaryExpression operator (operand1:AllowedEvaluationResultTypes) =
         | x ->
             EvaluationFailure (InvalidOperatorUse (sprintf "Unary Operator %A cannot be used with Array types" x))
 
+let computeBinaryFuncExpression (binaryFunc:BinaryFunction) (operand1:AllowedEvaluationResultTypes) (operand2:AllowedEvaluationResultTypes) =
+    match operand1, operand2 with
+    | (Double operand1DblValue, Double operand2DblValue) ->
+        match binaryFunc with
+        | ATan2 ->
+            EvaluationSuccess (Double (Math.Atan2(operand1DblValue, operand2DblValue)))
+        | x ->
+            EvaluationFailure (InvalidOperatorUse (sprintf "Binary function operator %A cannot be used with Double types" x))
+    | _ ->
+        match binaryFunc with
+        | x ->
+            EvaluationFailure (InvalidOperatorUse (sprintf "Binary function operator %A cannot be used" x))
+
 let computeTernaryExpression (conditionRes:AllowedEvaluationResultTypes) (trueRes:AllowedEvaluationResultTypes) (falseRes:AllowedEvaluationResultTypes) =
     match (conditionRes) with
         | (Double conditionResDblValue) ->
@@ -480,6 +457,16 @@ let rec EvaluateExpression (exp: Expression option) =
             | EvaluationSuccess expDbl ->
                 computeUnaryExpression unaryOp expDbl
             | EvaluationFailure failure ->
+                EvaluationFailure failure
+        | BinaryFuncExpression (binaryFunc,expr1, expr2) ->
+            let expr1Result = EvaluateExpression (Some expr1)
+            let expr2Result = EvaluateExpression (Some expr2)
+            match expr1Result, expr2Result with
+            | (EvaluationSuccess expr1Result, EvaluationSuccess expr2Result) ->
+                computeBinaryFuncExpression binaryFunc expr1Result expr2Result
+            | (EvaluationFailure failure, _) ->
+                EvaluationFailure failure
+            | (_, EvaluationFailure failure) ->
                 EvaluationFailure failure
         | NumArray x ->
             EvaluationSuccess (NumericArray x)
