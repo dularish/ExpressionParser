@@ -112,7 +112,7 @@ type UnaryOperator =
 
 type BinaryFunction =
     |ATan2
-    |UnknownFunction
+    |PowFn
 
 type Operator =
     | BinaryOperator of BinaryOperator
@@ -158,7 +158,7 @@ let unaryOps =
     dict["exp",Exp;"sin",Sin;"cos",Cos;"tan",Tan;"acos",ACos;"asin",ASin;"atan",ATan;"sinh",ASinh;"cosh",Cosh;"tanh",Tanh;"asinh",ASinh;"acosh",ACosh;"atanh",ATanh;"log",Log;"ln",Ln;"floor",Floor;"ceil",Ceil;"sqrt",Sqrt;"abs",Abs;"!",Not;"mean",Mean;"min",Min;"max",Max;"sd",Sd;"sum",Sum;"sumsquared",SumSquared]
 
 let binaryFunctions =
-    dict["atan2",ATan2]
+    dict["atan2",ATan2;"pow",PowFn]
 
 let parseArithmeticOp: Parser<_> =
     binaryOps
@@ -398,6 +398,8 @@ let computeBinaryFuncExpression (binaryFunc:BinaryFunction) (operand1:AllowedEva
         match binaryFunc with
         | ATan2 ->
             EvaluationSuccess (Double (Math.Atan2(operand1DblValue, operand2DblValue)))
+        | PowFn ->
+            EvaluationSuccess (Double (Math.Pow(operand1DblValue, operand2DblValue)))
         | x ->
             EvaluationFailure (InvalidOperatorUse (sprintf "Binary function operator %A cannot be used with Double types" x))
     | _ ->
