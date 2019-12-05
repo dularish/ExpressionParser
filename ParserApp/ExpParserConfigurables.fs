@@ -49,7 +49,7 @@ let parseVariableFromUserState =
             let variables = List.ofSeq (s.VariablesDict.Keys)
             let pChoiceVars = variables
                                 |> List.sortByDescending (fun s -> s.Length)
-                                |> List.map (fun var -> pstring var)
+                                |> List.map (fun var -> (pstring var) .>>? (notFollowedBy (satisfy (isLetter))))
                                 |> choice
             let pvalidVar = pChoiceVars
                             >>= (fun s ->
@@ -60,11 +60,12 @@ let parseVariableFromUserState =
     <?> "Parsing variable failed"
 
 type Parser<'a> = Parser<'a, UserState>
-
+    
 let masterVariables = dict [
                 "pi", Math.PI.ToString();
                 "e", Math.E.ToString();
-                "Math.PI", Math.PI.ToString()]
+                "Math.PI", Math.PI.ToString();
+                "Math.E", Math.E.ToString()]
 
 type BinaryOperator =
     | Plus
@@ -155,10 +156,16 @@ let binaryOps =
         dict["+",(BinaryOperator (Plus));"-",(BinaryOperator (Minus));"/",(BinaryOperator (Divide));"*",(BinaryOperator (Multiply));"^",(BinaryOperator (Pow));"%",(BinaryOperator (Modulo));"==",(BinaryOperator (EqualTo));"!=",(BinaryOperator (NotEqualTo));">=",(BinaryOperator (GreaterThanOrEqualTo));"<=",(BinaryOperator (LessThanOrEqualTo));">",(BinaryOperator (GreaterThan));"<",(BinaryOperator (LessThan));"&&",(BinaryOperator (LogicalAnd));"||",(BinaryOperator (LogicalOr))]
 
 let unaryOps =
-    dict["exp",Exp;"sin",Sin;"cos",Cos;"tan",Tan;"acos",ACos;"asin",ASin;"atan",ATan;"sinh",ASinh;"cosh",Cosh;"tanh",Tanh;"asinh",ASinh;"acosh",ACosh;"atanh",ATanh;"log",Log;"ln",Ln;"floor",Floor;"ceil",Ceil;"sqrt",Sqrt;"abs",Abs;"!",Not;"mean",Mean;"min",Min;"max",Max;"sd",Sd;"sum",Sum;"sumsquared",SumSquared]
+    dict[
+        "Math.Sin",Sin;"Math.Cos",Cos;"Math.Tan",Tan;"Math.Asin",ASin;"Math.Acos",ACos;"Math.Atan",ATan;"Math.Sinh",Sinh;"Math.Cosh",Cosh;"Math.Tanh",Tanh;
+        "Math.Abs",Abs;"Math.Ceiling",Ceil;"Math.Exp",Exp;"Math.Floor",Floor;"Math.Log",Ln;"Math.Log10",Log;
+        //Providing backward compatibility for the above Math functions
+        "exp",Exp;"sin",Sin;"cos",Cos;"tan",Tan;"acos",ACos;"asin",ASin;"atan",ATan;"sinh",Sinh;"cosh",Cosh;"tanh",Tanh;"asinh",ASinh;"acosh",ACosh;"atanh",ATanh;"log",Log;"ln",Ln;"floor",Floor;"ceil",Ceil;"sqrt",Sqrt;"abs",Abs;"!",Not;"mean",Mean;"min",Min;"max",Max;"sd",Sd;"sum",Sum;"sumsquared",SumSquared]
 
 let binaryFunctions =
-    dict["atan2",ATan2;"pow",PowFn]
+    dict[
+    "Math.Atan2",ATan2;"Math.Pow",PowFn;
+    "atan2",ATan2;"pow",PowFn]
 
 let parseArithmeticOp: Parser<_> =
     binaryOps
