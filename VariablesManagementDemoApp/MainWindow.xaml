@@ -33,6 +33,7 @@
             <TextBox Margin="20" Width="200" x:Name="_variableNameTextBox"  />
             <TextBox Margin="20" x:Name="_variableValueTextBox" />
             <Button Margin="20" x:Name="_addVariable" Click="_addVariable_Click">Add</Button>
+            <Button Margin="20" x:Name="_testTopoSort" Click="_testTopoSort_Click">Test topological sort</Button>
         </StackPanel>
     </Grid>
 </Window>

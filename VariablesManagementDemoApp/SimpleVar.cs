@@ -9,8 +9,12 @@ using System.Threading.Tasks;
 
 namespace VariablesManagementDemoApp
 {
-    public class SimpleVar : INotifyPropertyChanged
+    public class SimpleVar : INotifyPropertyChanged, IEquatable<SimpleVar>
     {
+        private static bool _isDependencyTreeUpdationOnProgress = false;
+        private static Graph<SimpleVar> _dependencyTreeGraph = new Graph<SimpleVar>();
+        private static bool _isDependencyTreeMode = false;
+
         private string _strValue = string.Empty;
         private string _evaluatedValue = string.Empty;
         private DateTime _lastUpdatedDateTime = DateTime.Now;
@@ -49,6 +53,27 @@ namespace VariablesManagementDemoApp
             {
                 clearDependencyVariables();
                 addDependencyVariables(dependencyVariables);
+
+                _dependencyTreeGraph.DeleteAllEdgesTo(this);
+                foreach (var depVar in dependencyVariables)
+                {
+                    _dependencyTreeGraph.AddEdge(depVar, this);
+                }
+            }
+
+            if (_isDependencyTreeMode)
+            {
+                if (!_isDependencyTreeUpdationOnProgress)
+                {
+                    Stack<SimpleVar> evaluationStack = _dependencyTreeGraph.TopologicalSort(this);
+                    _isDependencyTreeUpdationOnProgress = true;
+                    while (evaluationStack.Count > 0)
+                    {
+                        var topVar = evaluationStack.Pop();
+                        topVar.updateEvaluation(topVar.StrValue, false);
+                    }
+                    _isDependencyTreeUpdationOnProgress = false;
+                }
             }
 
             if (isEvaluationSuccess)
@@ -64,7 +89,11 @@ namespace VariablesManagementDemoApp
                 IsErrorHighlighted = true;
             }
             LastUpdatedDateTime = DateTime.Now;
-            ValueUpdated?.Invoke(this, EventArgs.Empty);
+
+            if (!_isDependencyTreeMode)
+            {
+                ValueUpdated?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         private void addDependencyVariables(List<SimpleVar> dependencyVariables)
@@ -185,6 +214,11 @@ namespace VariablesManagementDemoApp
         private void onPropertyChanged([CallerMemberName]string propertyName = "")
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        public bool Equals(SimpleVar other)
+        {
+            return this == other;
         }
 
         public string EvaluatedValue

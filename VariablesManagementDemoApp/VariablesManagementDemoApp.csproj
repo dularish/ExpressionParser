@@ -58,6 +58,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Graph.cs" />
     <Compile Include="SimpleVar.cs" />
     <Compile Include="VariablesMgmtWindowViewModel.cs" />
     <Page Include="MainWindow.xaml">
