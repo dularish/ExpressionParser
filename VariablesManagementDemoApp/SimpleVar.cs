@@ -48,7 +48,14 @@ namespace VariablesManagementDemoApp
         private void updateEvaluation(string value, bool isDependenciesToBeUpdated)
         {
             bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
-            _cachedVars[Name] = evaluatedResult;
+            if (isEvaluationSuccess)
+            {
+                _cachedVars[Name] = evaluatedResult;
+            }
+            else
+            {
+                _cachedVars.Remove(Name);
+            }
             if (isDependenciesToBeUpdated)
             {
                 clearDependencyVariables();
@@ -65,14 +72,24 @@ namespace VariablesManagementDemoApp
             {
                 if (!_isDependencyTreeUpdationOnProgress)
                 {
-                    Stack<SimpleVar> evaluationStack = _dependencyTreeGraph.TopologicalSort(this);
-                    _isDependencyTreeUpdationOnProgress = true;
-                    while (evaluationStack.Count > 0)
+                    Stack<SimpleVar> evaluationStack = _dependencyTreeGraph.TopologicalSort(this, out bool isCyclic);
+                    if (isCyclic)
                     {
-                        var topVar = evaluationStack.Pop();
-                        topVar.updateEvaluation(topVar.StrValue, false);
+                        isEvaluationSuccess = false;
+                        evaluationFailureMessage = "Cyclic referencing found by one of the dependencies";
+                        _dependencyTreeGraph.DeleteAllEdgesTo(this);
+                        _cachedVars.Remove(Name);
                     }
-                    _isDependencyTreeUpdationOnProgress = false;
+                    else
+                    {
+                        _isDependencyTreeUpdationOnProgress = true;
+                        while (evaluationStack.Count > 0)
+                        {
+                            var topVar = evaluationStack.Pop();
+                            topVar.updateEvaluation(topVar.StrValue, false);
+                        }
+                        _isDependencyTreeUpdationOnProgress = false;
+                    }
                 }
             }
 

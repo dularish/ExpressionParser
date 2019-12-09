@@ -58,7 +58,7 @@ namespace VariablesManagementDemoApp
             variablesGraph.AddEdge('H', 'I');
 
             StringBuilder sbRes = new StringBuilder();
-            Stack<char> topoSortRes = variablesGraph.TopologicalSort('B');
+            Stack<char> topoSortRes = variablesGraph.TopologicalSort('B', out bool isCyclic);
 
             while(topoSortRes.Count > 0)
             {

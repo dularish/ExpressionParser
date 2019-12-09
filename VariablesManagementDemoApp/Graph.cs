@@ -33,36 +33,44 @@ namespace VariablesManagementDemoApp
             }
         }
 
-        public Stack<T> TopologicalSort(T varToStart)
+        public Stack<T> TopologicalSort(T varToStart, out bool isCyclicGraph)
         {
-            Dictionary<T, bool> visitedDict = _adjacencyList.ToDictionary(s => s.Key, s => false);
+            Dictionary<T, GraphNodeVisitStatus> visitedDict = _adjacencyList.ToDictionary(s => s.Key, s => GraphNodeVisitStatus.NotVisisted);
             Stack<T> resultStack = new Stack<T>();
-            Stack<T> dfsRes = getDFS(visitedDict, varToStart, resultStack);
-
+            Stack<T> dfsRes = getDFS(visitedDict, varToStart, resultStack, out bool isCyclicGraph_Inner);
+            isCyclicGraph = isCyclicGraph_Inner;
             return dfsRes;
         }
 
-        private Stack<T> getDFS(Dictionary<T, bool> visitedDict, T dfsNode, Stack<T> resultStack)
+        private Stack<T> getDFS(Dictionary<T, GraphNodeVisitStatus> visitedDict, T dfsNode, Stack<T> resultStack, out bool isCyclic)
         {
-            visitedDict[dfsNode] = true;//Preventing looping again the childItems//Think of a case regarding this apart from cycles
+            visitedDict[dfsNode] = GraphNodeVisitStatus.InProcess;
             if (_adjacencyList.ContainsKey(dfsNode))
             {
                 foreach (var childItem in _adjacencyList[dfsNode])
                 {
                     if (!visitedDict.ContainsKey(childItem))
                     {
-                        visitedDict.Add(childItem, false);
+                        visitedDict.Add(childItem, GraphNodeVisitStatus.NotVisisted);
                     }
 
-                    if (!visitedDict[childItem])
+                    if (visitedDict[childItem] == GraphNodeVisitStatus.NotVisisted)
                     {
-                        getDFS(visitedDict, childItem, resultStack);
+                        getDFS(visitedDict, childItem, resultStack, out bool isCyclic_Inner);
+                    }
+
+                    if(visitedDict[childItem] == GraphNodeVisitStatus.InProcess)
+                    {
+                        isCyclic = true;
+                        return resultStack;
                     }
                 }
             }
 
+            visitedDict[dfsNode] = GraphNodeVisitStatus.Visited;
             resultStack.Push(dfsNode);
 
+            isCyclic = false;
             return resultStack;
         }
 
@@ -75,6 +83,13 @@ namespace VariablesManagementDemoApp
                     _adjacencyList[_listItem].Remove(destNode);
                 }
             }
+        }
+
+        public enum GraphNodeVisitStatus
+        {
+            NotVisisted = 0,
+            InProcess = 1,
+            Visited = 2
         }
     }
 }
