@@ -6,13 +6,18 @@ open AlgorithmImpl
 open System
 
 let parseVariableTerm=
+    (parseVariableFromUserStateCache
+    >>= (fun (varKey, expressionParsed) ->
+            preturn (ExpressionOutput(expressionParsed)) .>> (softPushRefVarForThisLayer varKey))
+    )
+    <|>
     (parseVariableFromUserState
     >>= (fun (varKey, varValue, variablesDict, variablesRef, currentVarName) ->
                 runParserOnString ((initializeRefVars (currentVarName:: variablesRef)) >>. (setVariableNameToUserState varKey) >>. (initializeVariablesDict variablesDict) >>. (globalExpParser)) UserState.Default varKey varValue
                 |> (fun x ->
                         match x with
                         | Success ((ExpressionOutput (expressionParsed)), _, _) ->
-                            preturn (ExpressionOutput(expressionParsed)) .>> (softPushRefVarForThisLayer varKey)
+                            (addVariableCache varKey expressionParsed) >>. preturn (ExpressionOutput(expressionParsed)) .>> (softPushRefVarForThisLayer varKey)
                         | Failure (label, err, pos) ->
                             fail (sprintf "Error in evaluating the expression for the variable %s ->\n%s" varKey label)
                 ))) .>> spaces

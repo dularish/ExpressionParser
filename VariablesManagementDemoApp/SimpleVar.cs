@@ -13,7 +13,7 @@ namespace VariablesManagementDemoApp
     {
         private static bool _isDependencyTreeUpdationOnProgress = false;
         private static Graph<SimpleVar> _dependencyTreeGraph = new Graph<SimpleVar>();
-        private static bool _isDependencyTreeMode = false;
+        private static bool _isDependencyTreeMode = true;
 
         private string _strValue = string.Empty;
         private string _evaluatedValue = string.Empty;
@@ -48,7 +48,7 @@ namespace VariablesManagementDemoApp
         private void updateEvaluation(string value, bool isDependenciesToBeUpdated)
         {
             bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
-
+            _cachedVars[Name] = evaluatedResult;
             if (isDependenciesToBeUpdated)
             {
                 clearDependencyVariables();
@@ -73,6 +73,7 @@ namespace VariablesManagementDemoApp
                         topVar.updateEvaluation(topVar.StrValue, false);
                     }
                     _isDependencyTreeUpdationOnProgress = false;
+                    _cachedVars.Clear();
                 }
             }
 
@@ -142,11 +143,18 @@ namespace VariablesManagementDemoApp
         }
 
         private ObservableCollection<SimpleVar> _centralizedVariablesCollection;
+        private static Dictionary<string, string> _cachedVars = new Dictionary<string, string>();
 
         private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
             Dictionary<string, string> dictForEvaluation = _centralizedVariablesCollection.ToDictionary(s => s.Name, s => s.StrValue);
             //var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
+
+            //Utilizing cachedVars collection
+            foreach (var cachePair in _cachedVars)
+            {
+                dictForEvaluation[cachePair.Key] = cachePair.Value;
+            }
             
             var parsedOutput = FParsecExpressionEvaluator.parseAndEvaluateExpressionExpressively(value, dictForEvaluation, this.Name);
 

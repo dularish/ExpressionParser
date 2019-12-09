@@ -3,70 +3,6 @@ open System
 open FParsec
 open System.Collections.Generic
 
-type UserState = 
-    {
-        VariablesReferenced:string list;
-        VariablesReferencedByThisLayer:string list;
-        VariablesDict:IDictionary<string,string>;
-        VariableName:string
-    }
-    with
-    static member Default = {VariablesReferenced = []; VariablesDict=dict[]; VariableName="unNamedVar"; VariablesReferencedByThisLayer = []}
-
-let softPushRefVarForThisLayer varName= 
-    updateUserState (fun s -> 
-        if (s.VariablesReferencedByThisLayer |> List.contains varName) then
-            s
-        else
-            {s with VariablesReferencedByThisLayer = varName::s.VariablesReferencedByThisLayer}
-        )
-
-let setVariableNameToUserState varName =
-    updateUserState (fun s ->
-        {s with VariableName = varName})
-
-let initializeVariablesDict variablesDict =
-    updateUserState (fun s ->
-        {s with VariablesDict = variablesDict})
-
-let initializeRefVars variablesRef =
-    updateUserState (fun s ->
-        {s with VariablesReferenced = variablesRef})
-
-let checkVarNotBeingSelfRef varName =
-    userStateSatisfies (fun s -> 
-                            not (s.VariableName = varName))
-    <?> (sprintf "Self referencing of variable %s" varName)
-
-let checkVarNotRefPrior varName =
-    userStateSatisfies (fun s -> 
-                            not (s.VariablesReferenced |> List.contains varName))
-    <?> (sprintf "Circular referencing of variable %s" varName)
-
-let parseVariableFromUserState =
-    getUserState
-    >>= (fun s ->
-            let variables = List.ofSeq (s.VariablesDict.Keys)
-            let pChoiceVars = variables
-                                |> List.sortByDescending (fun s -> s.Length)
-                                |> List.map (fun var -> (pstring var) .>>? (notFollowedBy (satisfy (isLetter))))
-                                |> choice
-            let pvalidVar = pChoiceVars
-                            >>= (fun s ->
-                                    (checkVarNotBeingSelfRef s) >>. (checkVarNotRefPrior s) >>. (preturn s))
-            pvalidVar
-            >>= (fun validVar -> preturn (validVar, s.VariablesDict.[validVar], s.VariablesDict, s.VariablesReferenced, s.VariableName))
-            )
-    <?> "Parsing variable failed"
-
-type Parser<'a> = Parser<'a, UserState>
-    
-let masterVariables = dict [
-                "pi", Math.PI.ToString();
-                "e", Math.E.ToString();
-                "Math.PI", Math.PI.ToString();
-                "Math.E", Math.E.ToString()]
-
 type BinaryOperator =
     | Plus
     | Minus
@@ -131,6 +67,93 @@ type Expression =
     | BinaryFuncExpression of BinaryFunction * Expression * Expression
     | StringExpression of string
     | NumArray of (double list)
+
+type UserState = 
+    {
+        VariablesReferenced:string list;
+        VariablesReferencedByThisLayer:string list;
+        VariablesDict:IDictionary<string,string>;
+        VariableName:string
+        VariablesEvalCache: Map<string,Expression>;
+    }
+    with
+    static member Default = {VariablesReferenced = []; VariablesDict=dict[]; VariableName="unNamedVar"; VariablesReferencedByThisLayer = []; VariablesEvalCache = Map.empty}
+
+let softPushRefVarForThisLayer varName= 
+    updateUserState (fun s -> 
+        if (s.VariablesReferencedByThisLayer |> List.contains varName) then
+            s
+        else
+            {s with VariablesReferencedByThisLayer = varName::s.VariablesReferencedByThisLayer}
+        )
+
+let setVariableNameToUserState varName =
+    updateUserState (fun s ->
+        {s with VariableName = varName})
+
+let initializeVariablesDict variablesDict =
+    updateUserState (fun s ->
+        {s with VariablesDict = variablesDict})
+
+let addVariableCache varName expValue = 
+    updateUserState (fun s ->
+        if s.VariablesEvalCache.ContainsKey(varName) then s
+        else
+            {s with VariablesEvalCache = (s.VariablesEvalCache.Add(varName,expValue))})
+
+let initializeRefVars variablesRef =
+    updateUserState (fun s ->
+        {s with VariablesReferenced = variablesRef})
+
+let checkVarNotBeingSelfRef varName =
+    userStateSatisfies (fun s -> 
+                            not (s.VariableName = varName))
+    <?> (sprintf "Self referencing of variable %s" varName)
+
+let checkVarNotRefPrior varName =
+    userStateSatisfies (fun s -> 
+                            not (s.VariablesReferenced |> List.contains varName))
+    <?> (sprintf "Circular referencing of variable %s" varName)
+
+let parseVariableFromUserStateCache =
+    getUserState
+    >>= (fun s ->
+            let variables = List.ofSeq (s.VariablesEvalCache |> Map.toSeq |> Seq.map fst)
+            let pChoiceVars = variables
+                                |> List.sortByDescending (fun s -> s.Length)
+                                |> List.map (fun var -> (pstring var) .>>? (notFollowedBy (satisfy (isLetter))))
+                                |> choice
+            let pvalidVar = pChoiceVars
+                            >>= (fun s ->
+                                    (checkVarNotBeingSelfRef s) >>. (checkVarNotRefPrior s) >>. (preturn s))
+            pvalidVar
+            >>= (fun validVar -> preturn (validVar, s.VariablesEvalCache.[validVar]))
+            )
+    <?> "Parsing variable from cache failed"
+
+let parseVariableFromUserState =
+    getUserState
+    >>= (fun s ->
+            let variables = List.ofSeq (s.VariablesDict.Keys)
+            let pChoiceVars = variables
+                                |> List.sortByDescending (fun s -> s.Length)
+                                |> List.map (fun var -> (pstring var) .>>? (notFollowedBy (satisfy (isLetter))))
+                                |> choice
+            let pvalidVar = pChoiceVars
+                            >>= (fun s ->
+                                    (checkVarNotBeingSelfRef s) >>. (checkVarNotRefPrior s) >>. (preturn s))
+            pvalidVar
+            >>= (fun validVar -> preturn (validVar, s.VariablesDict.[validVar], s.VariablesDict, s.VariablesReferenced, s.VariableName))
+            )
+    <?> "Parsing variable failed"
+
+type Parser<'a> = Parser<'a, UserState>
+    
+let masterVariables = dict [
+                "pi", Math.PI.ToString();
+                "e", Math.E.ToString();
+                "Math.PI", Math.PI.ToString();
+                "Math.E", Math.E.ToString()]
 
 type ExpressionEvaluationReturnType =
     |ExpressionOutput of Expression
