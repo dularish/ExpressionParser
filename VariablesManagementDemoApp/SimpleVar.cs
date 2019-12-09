@@ -73,7 +73,6 @@ namespace VariablesManagementDemoApp
                         topVar.updateEvaluation(topVar.StrValue, false);
                     }
                     _isDependencyTreeUpdationOnProgress = false;
-                    _cachedVars.Clear();
                 }
             }
 
