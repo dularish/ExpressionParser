@@ -50,11 +50,11 @@ namespace VariablesManagementDemoApp
             bool isEvaluationSuccess = evaluate(value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables);
             if (isEvaluationSuccess)
             {
-                _cachedVars[Name] = evaluatedResult;
+                _tempCachePerformanceBooster[Name] = evaluatedResult;
             }
             else
             {
-                _cachedVars.Remove(Name);
+                _tempCachePerformanceBooster.Remove(Name);
             }
             if (isDependenciesToBeUpdated)
             {
@@ -78,7 +78,6 @@ namespace VariablesManagementDemoApp
                         isEvaluationSuccess = false;
                         evaluationFailureMessage = "Cyclic referencing found by one of the dependencies";
                         _dependencyTreeGraph.DeleteAllEdgesTo(this);
-                        _cachedVars.Remove(Name);
                     }
                     else
                     {
@@ -90,6 +89,7 @@ namespace VariablesManagementDemoApp
                         }
                         _isDependencyTreeUpdationOnProgress = false;
                     }
+                    _tempCachePerformanceBooster.Clear();//This is essential because the purpose of _cachedVars is only for boosting performance during dependencies re-evaluation
                 }
             }
 
@@ -159,7 +159,7 @@ namespace VariablesManagementDemoApp
         }
 
         private ObservableCollection<SimpleVar> _centralizedVariablesCollection;
-        private static Dictionary<string, string> _cachedVars = new Dictionary<string, string>();
+        private static Dictionary<string, string> _tempCachePerformanceBooster = new Dictionary<string, string>();
 
         private bool evaluate(string value, out string evaluatedResult, out string evaluationFailureMessage, out List<SimpleVar> dependencyVariables)
         {
@@ -167,11 +167,11 @@ namespace VariablesManagementDemoApp
             //var parsedOutput = MathematicalExpressionParser.parseAndEvaluateExpression(value, dictForEvaluation, this.Name);
 
             //Utilizing cachedVars collection
-            foreach (var cachePair in _cachedVars)
+            foreach (var cachePair in _tempCachePerformanceBooster)
             {
                 dictForEvaluation[cachePair.Key] = cachePair.Value;
             }
-            
+
             var parsedOutput = FParsecExpressionEvaluator.parseAndEvaluateExpressionExpressively(value, dictForEvaluation, this.Name);
 
             List<string> refVariables = parsedOutput.Item3.ToList();
