@@ -292,6 +292,41 @@ type ExpressionEvaluationResult =
     | EvaluationSuccess of AllowedEvaluationResultTypes
     | EvaluationFailure of ExpressionEvaluationError
 
+let getFailureMessage(evalFailure:ExpressionEvaluationError) =
+    match evalFailure with
+    | ParsingError x ->
+        match x with
+        | InsufficientParanthesis parsingErrorMessage
+        | TooManyParanthesis parsingErrorMessage
+        | MissingOperator parsingErrorMessage
+        | EmptyParanthesis parsingErrorMessage
+        | TrailingNegativeSign parsingErrorMessage
+        | InvalidSymbolFollowedByNegativeSign parsingErrorMessage
+        | SequencingOfOperatorsNotAllowed parsingErrorMessage
+        | OperatorNotExpected parsingErrorMessage
+        | UnhandledInput parsingErrorMessage
+        | EmptyExpression parsingErrorMessage
+        | UnrecognizedInput parsingErrorMessage
+        | EmptyVariableExpression parsingErrorMessage
+        | VariableParsingFailed parsingErrorMessage
+        | VariableDoesNotExists parsingErrorMessage
+        | MathExpressionParsingFailureType.UnexpectedToken parsingErrorMessage
+        | InvalidExpressionTerm parsingErrorMessage
+        | InvalidNumberOfExpressionsInStack parsingErrorMessage
+        | NotEnoughOperands parsingErrorMessage
+        | TooManyOperands parsingErrorMessage
+        | CircularReferencingFound parsingErrorMessage
+        | IncompleteParsing parsingErrorMessage ->
+            parsingErrorMessage
+    | UnexpectedToken errorMessage
+    | InvalidOperatorUse errorMessage
+    | UnRecognizedToken errorMessage
+    | DivideByZeroAttempted errorMessage
+    | UnBalancedParanthesis errorMessage
+    | ArrayTypeNotSupportedAsReturnType errorMessage ->
+        errorMessage
+            
+
 let doubleToBool x =
     x = 1.
 

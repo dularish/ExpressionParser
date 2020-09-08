@@ -221,7 +221,7 @@ namespace VariablesManagementDemoApp
             }
             else
             {
-                string evaluationErrorMessage = (parsedOutput.Item1 as ExpParserConfigurables.ExpressionEvaluationResult.EvaluationFailure).Item.ToString();
+                string evaluationErrorMessage = ExpParserConfigurables.getFailureMessage((parsedOutput.Item1 as ExpParserConfigurables.ExpressionEvaluationResult.EvaluationFailure).Item);
 
                 evaluatedResult = string.Empty;
                 evaluationFailureMessage = evaluationErrorMessage;
