@@ -30,10 +30,17 @@
             </DataGrid.Columns>
         </DataGrid>
         <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <TextBox Margin="20" Width="200" x:Name="_variableNameTextBox"  />
-            <TextBox Margin="20" x:Name="_variableValueTextBox" />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="20,20,5,20" Width="100" Text="Variable Name : " />
+                <TextBox Margin="5,20,20,20" Width="100" x:Name="_variableNameTextBox"  />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="20,20,5,20" Width="100" Text="Expression  : " />
+                <TextBox Margin="5,20,20,20" Width="100" x:Name="_variableValueTextBox" />
+            </StackPanel>
+            
             <Button Margin="20" x:Name="_addVariable" Click="_addVariable_Click">Add</Button>
-            <Button Margin="20" x:Name="_testTopoSort" Click="_testTopoSort_Click">Test topological sort</Button>
+            <Button Margin="20" x:Name="_testTopoSort" Click="_testTopoSort_Click" Visibility="Collapsed">Test topological sort</Button>
         </StackPanel>
     </Grid>
 </Window>
